@@ -117,8 +117,10 @@ export async function fetchConversations(userId: string) {
       return {
         bookingId: booking.id,
         bookingStatus: booking.status,
+        // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
         serviceName: (booking.service_type as { name: string })?.name ?? '',
         otherUser:
+          // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
           (booking.client as { id: string })?.id === userId
             ? booking.cleaner
             : booking.client,

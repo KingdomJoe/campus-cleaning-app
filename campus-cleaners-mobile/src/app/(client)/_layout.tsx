@@ -69,6 +69,13 @@ export default function ClientLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="settings/location"
+        options={{
+          href: null,
+          title: 'Location Settings',
+        }}
+      />
     </Tabs>
   );
 }

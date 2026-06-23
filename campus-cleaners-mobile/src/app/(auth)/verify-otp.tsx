@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { View, StyleSheet, TextInput as RNTextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, TextInput as RNTextInput, KeyboardAvoidingView, Platform, Alert, ScrollView } from 'react-native';
 import { Text, Button } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { uploadAvatar, uploadDocument } from '@/lib/api/uploads';
 import { colors, spacing } from '@/lib/theme';
 
 const OTP_LENGTH = 6;
@@ -19,6 +21,7 @@ export default function VerifyOTPScreen() {
   const [error, setError] = useState('');
   const inputRefs = useRef<(RNTextInput | null)[]>([]);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
+  const insets = useSafeAreaInsets();
 
   const handleChange = (text: string, index: number) => {
     const newOtp = [...otp];
@@ -47,6 +50,31 @@ export default function VerifyOTPScreen() {
     setIsLoading(true);
 
     try {
+      if (BYPASS_AUTH) {
+        const tempData = useAuthStore.getState().mockTempData;
+        const role = useAuthStore.getState().mockTempRole || (tempData?.cleanerDetails ? 'cleaner' : 'client');
+        
+        const mockEmail = tempData?.method === 'email' ? tempData.identifier : (method === 'email' ? identifier : 'beta-tester@campuscleaners.com');
+        const mockPhone = tempData?.method === 'phone' ? tempData.identifier : (method === 'phone' ? identifier : '+233241234567');
+        const mockName = tempData?.fullName || 'Beta Tester';
+
+        await useAuthStore.getState().mockLogin(
+          mockEmail,
+          mockPhone,
+          mockName,
+          role,
+          tempData?.cleanerDetails
+        );
+
+        if (role === 'cleaner') {
+          router.replace('/(cleaner)/jobs');
+        } else {
+          router.replace('/(client)/home');
+        }
+        setIsLoading(false);
+        return;
+      }
+
       let result;
       if (method === 'phone') {
         result = await supabase.auth.verifyOtp({
@@ -72,6 +100,21 @@ export default function VerifyOTPScreen() {
         // New user — go to registration
         router.replace('/(auth)/register');
       } else if (role === 'cleaner') {
+        const { pendingDocuments, pendingProfilePhoto, clearPendingUploads, user } = useAuthStore.getState();
+        if (user) {
+          // If cleaner, upload photo and documents
+          if (pendingProfilePhoto) {
+            await uploadAvatar(user.id, pendingProfilePhoto);
+          }
+          if (pendingDocuments) {
+            for (const [docType, uri] of Object.entries(pendingDocuments)) {
+              if (uri) {
+                await uploadDocument(user.id, docType, uri);
+              }
+            }
+          }
+          clearPendingUploads();
+        }
         router.replace('/(cleaner)/jobs');
       } else {
         router.replace('/(client)/home');
@@ -101,63 +144,74 @@ export default function VerifyOTPScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <View style={styles.content}>
-        <Text style={styles.title} variant="headlineMedium">
-          Verify OTP
-        </Text>
-        <Text style={styles.subtitle} variant="bodyLarge">
-          Enter the {OTP_LENGTH}-digit code sent to
-        </Text>
-        <Text style={styles.identifier} variant="titleSmall">
-          {identifier}
-        </Text>
-
-        <View style={styles.otpContainer}>
-          {otp.map((digit, index) => (
-            <RNTextInput
-              key={index}
-              ref={(ref) => { inputRefs.current[index] = ref; }}
-              style={[styles.otpInput, digit ? styles.otpFilled : null]}
-              value={digit}
-              onChangeText={(text) => handleChange(text.slice(-1), index)}
-              onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
-              keyboardType="number-pad"
-              maxLength={1}
-              selectTextOnFocus
-            />
-          ))}
-        </View>
-
-        {error ? (
-          <Text style={styles.error} variant="bodySmall">
-            {error}
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top, 24),
+            paddingBottom: Math.max(insets.bottom, 24) + 16,
+          }
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.content}>
+          <Text style={styles.title} variant="headlineMedium">
+            Verify OTP
           </Text>
-        ) : null}
+          <Text style={styles.subtitle} variant="bodyLarge">
+            Enter the {OTP_LENGTH}-digit code sent to
+          </Text>
+          <Text style={styles.identifier} variant="titleSmall">
+            {identifier}
+          </Text>
 
-        <Button
-          mode="contained"
-          onPress={() => verifyOTP(otp.join(''))}
-          loading={isLoading}
-          disabled={isLoading || otp.some((d) => !d)}
-          style={styles.btn}
-          contentStyle={styles.btnContent}
-          buttonColor={colors.primary}
-        >
-          Verify
-        </Button>
+          <View style={styles.otpContainer}>
+            {otp.map((digit, index) => (
+              <RNTextInput
+                key={index}
+                ref={(ref) => { inputRefs.current[index] = ref; }}
+                style={[styles.otpInput, digit ? styles.otpFilled : null]}
+                value={digit}
+                onChangeText={(text) => handleChange(text.slice(-1), index)}
+                onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
+                keyboardType="number-pad"
+                maxLength={1}
+                selectTextOnFocus
+              />
+            ))}
+          </View>
 
-        <Button
-          mode="text"
-          onPress={handleResend}
-          textColor={colors.onSurfaceVariant}
-          style={styles.resendBtn}
-        >
-          Didn't receive a code? Resend
-        </Button>
-      </View>
+          {error ? (
+            <Text style={styles.error} variant="bodySmall">
+              {error}
+            </Text>
+          ) : null}
+
+          <Button
+            mode="contained"
+            onPress={() => verifyOTP(otp.join(''))}
+            loading={isLoading}
+            disabled={isLoading || otp.some((d) => !d)}
+            style={styles.btn}
+            contentStyle={styles.btnContent}
+            buttonColor={colors.primary}
+          >
+            Verify
+          </Button>
+
+          <Button
+            mode="text"
+            onPress={handleResend}
+            textColor={colors.onSurfaceVariant}
+            style={styles.resendBtn}
+          >
+            Didn't receive a code? Resend
+          </Button>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -168,9 +222,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
-    flex: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: 100,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   title: {
     color: colors.white,

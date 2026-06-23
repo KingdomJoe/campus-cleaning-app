@@ -37,6 +37,7 @@ export async function initiatePayment(params: {
     return null;
   }
 
+  // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
   return data;
 }
 
@@ -85,6 +86,7 @@ export async function fetchBookingPayment(bookingId: string): Promise<Payment | 
     .single();
 
   if (error) return null;
+  // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
   return data;
 }
 
@@ -105,10 +107,14 @@ export async function fetchCleanerEarnings(cleanerId: string) {
 
   const all = payments ?? [];
   const available = all
+    // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
     .filter((p) => p.status === 'released')
+    // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
     .reduce((sum, p) => sum + p.cleaner_payout, 0);
   const pending = all
+    // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
     .filter((p) => p.status === 'held')
+    // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
     .reduce((sum, p) => sum + p.cleaner_payout, 0);
   const total = available + pending;
 

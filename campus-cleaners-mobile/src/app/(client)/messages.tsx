@@ -22,6 +22,7 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (user?.id) {
       fetchConversations(user.id).then((data) => {
+        // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
         setConversations(data as Conversation[]);
       });
     }

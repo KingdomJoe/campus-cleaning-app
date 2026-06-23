@@ -2,6 +2,7 @@ const user = guardRole('admin');
 let allUsers = [];
 let allBookings = [];
 let allFeedback = [];
+let allPendingCleaners = [];
 
 if (user) {
   document.getElementById('userName').textContent = user.full_name;
@@ -13,7 +14,7 @@ wireAvatarUpload();
 async function initDashboard() {
   wireNav();
   wireUserSearch();
-  await Promise.all([loadUsers(), loadBookings(), loadFeedback(), loadPlatformRating()]);
+  await Promise.all([loadUsers(), loadBookings(), loadFeedback(), loadPlatformRating(), loadPendingCleaners()]);
   renderOverview();
 }
 
@@ -248,4 +249,87 @@ function wireAvatarUpload() {
       input.value = '';
     }
   });
+}
+
+/* ---------------- Cleaner Verification ---------------- */
+async function loadPendingCleaners() {
+  try {
+    const { cleaners } = await api('/users/pending-cleaners');
+    allPendingCleaners = cleaners || [];
+    renderVerificationsTable();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function renderVerificationsTable() {
+  const tbody = document.getElementById('verificationsTableBody');
+  if (!tbody) return;
+  if (!allPendingCleaners.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--ink-soft); padding:32px;">No cleaners registered in Supabase yet.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = allPendingCleaners.map((c) => {
+    const name = c.profile?.full_name || 'Anonymous';
+    const email = c.profile?.email || '—';
+    const phone = c.profile?.phone || '—';
+    const momo = c.mobile_money_number || '—';
+    const skills = Array.isArray(c.skills) ? c.skills.join(', ') : (c.skills || '—');
+    const bio = c.bio || '—';
+    const status = c.verification_status || 'pending';
+
+    const docLinks = c.documents && c.documents.length
+      ? c.documents.map(d => `<a href="${d.file_url}" target="_blank" class="btn btn-outline btn-xs" style="margin-right:4px; margin-bottom:4px; display:inline-block; text-transform:capitalize;">${d.document_type.replace('_', ' ')}</a>`).join('')
+      : '<span style="color:var(--ink-soft); font-style:italic;">No documents uploaded</span>';
+
+    const statusClass = {
+      pending: 'pill-pending',
+      approved: 'pill-available',
+      rejected: 'pill-cancelled'
+    }[status] || 'pill-pending';
+
+    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+
+    return `
+      <tr>
+        <td>
+          <strong>${escapeHtml(name)}</strong><br>
+          <span style="font-size:0.78rem;color:var(--ink-soft);">${escapeHtml(email)}</span><br>
+          <span style="font-size:0.78rem;color:var(--ink-soft);">${escapeHtml(phone)}</span><br>
+          <div style="font-size:0.78rem;color:var(--ink-soft); margin-top:4px; font-style:italic;">"${escapeHtml(bio)}"</div>
+        </td>
+        <td>
+          <strong>Skills:</strong> ${escapeHtml(skills)}<br>
+          <strong>MoMo:</strong> ${escapeHtml(momo)}
+        </td>
+        <td>${docLinks}</td>
+        <td><span class="pill ${statusClass}">${statusLabel}</span></td>
+        <td class="table-actions">
+          ${status !== 'approved' ? `<button class="btn btn-sm btn-primary" data-verify-cleaner="${c.user_id}" data-action="approved" style="margin-right:4px;">Approve</button>` : ''}
+          ${status !== 'rejected' ? `<button class="btn btn-sm btn-danger" data-verify-cleaner="${c.user_id}" data-action="rejected">Reject</button>` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('[data-verify-cleaner]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      verifyCleanerAction(btn.dataset.verifyCleaner, btn.dataset.action);
+    });
+  });
+}
+
+async function verifyCleanerAction(id, action) {
+  if (!confirm(`Are you sure you want to set this cleaner's verification status to ${action}?`)) return;
+  try {
+    await api(`/users/cleaners/${id}/verify`, {
+      method: 'PATCH',
+      body: { status: action }
+    });
+    showToast(`Cleaner successfully ${action}!`, 'success');
+    await loadPendingCleaners();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }

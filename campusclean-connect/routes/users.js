@@ -4,6 +4,12 @@ const requireAuth = require('../middleware/requireAuth');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
+
+// Initialize Supabase Client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -110,6 +116,81 @@ router.patch('/:id/status', requireAuth(['admin']), (req, res) => {
   }
   db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, req.params.id);
   res.json({ success: true });
+});
+
+// Admin: Get list of cleaners from Supabase who are pending/submitted verification documents
+router.get('/pending-cleaners', requireAuth(['admin']), async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: 'Supabase configuration is missing on the server.' });
+  }
+
+  try {
+    // Get all cleaner profiles
+    const { data: cleaners, error: cleanerErr } = await supabase
+      .from('cleaner_profiles')
+      .select('*, profiles:user_id(*)');
+
+    if (cleanerErr) throw cleanerErr;
+
+    if (!cleaners || cleaners.length === 0) {
+      return res.json({ cleaners: [] });
+    }
+
+    // Get all uploaded verification documents
+    const cleanerIds = cleaners.map((c) => c.user_id);
+    const { data: docs, error: docErr } = await supabase
+      .from('cleaner_documents')
+      .select('*')
+      .in('cleaner_id', cleanerIds);
+
+    if (docErr) throw docErr;
+
+    // Group documents by cleaner_id
+    const docsByCleaner = {};
+    if (docs) {
+      docs.forEach((doc) => {
+        if (!docsByCleaner[doc.cleaner_id]) {
+          docsByCleaner[doc.cleaner_id] = [];
+        }
+        docsByCleaner[doc.cleaner_id].push(doc);
+      });
+    }
+
+    // Merge documents into cleaner objects
+    const result = cleaners.map((c) => ({
+      ...c,
+      profile: c.profiles,
+      documents: docsByCleaner[c.user_id] || [],
+    }));
+
+    res.json({ cleaners: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to fetch pending cleaners.' });
+  }
+});
+
+// Admin: Approve or Reject a cleaner's verification status
+router.patch('/cleaners/:id/verify', requireAuth(['admin']), async (req, res) => {
+  if (!supabase) {
+    return res.status(503).json({ error: 'Supabase configuration is missing on the server.' });
+  }
+
+  const { status } = req.body;
+  if (!['approved', 'rejected', 'pending'].includes(status)) {
+    return res.status(400).json({ error: 'Status must be approved, rejected, or pending.' });
+  }
+
+  try {
+    const { error } = await supabase
+      .from('cleaner_profiles')
+      .update({ verification_status: status })
+      .eq('user_id', req.params.id);
+
+    if (error) throw error;
+    res.json({ success: true, message: `Cleaner verification status set to ${status}.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to update cleaner verification status.' });
+  }
 });
 
 module.exports = router;

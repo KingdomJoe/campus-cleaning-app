@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button, Card, Divider } from 'react-native-paper';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import { createNotification } from '@/lib/notifications';
 import type { Booking, BookingStatus } from '@/lib/database.types';
@@ -33,6 +33,16 @@ export default function JobDetailScreen() {
 
   const loadBooking = async () => {
     if (!id) return;
+
+    if (BYPASS_AUTH) {
+      const activeItem = useBookingStore.getState().activeBookings.find(b => b.id === id);
+      const pastItem = useBookingStore.getState().pastBookings.find(b => b.id === id);
+      const availItem = useBookingStore.getState().availableJobs.find(b => b.id === id);
+      setBooking(activeItem || pastItem || availItem || null);
+      setIsLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from('bookings')
       .select(`
@@ -54,6 +64,13 @@ export default function JobDetailScreen() {
     if (!transition) return;
 
     setUpdating(true);
+
+    if (BYPASS_AUTH) {
+      await updateBookingStatus(booking.id, transition.next);
+      setUpdating(false);
+      loadBooking();
+      return;
+    }
 
     // If accepting, assign cleaner to the booking
     if (booking.status === 'requested') {

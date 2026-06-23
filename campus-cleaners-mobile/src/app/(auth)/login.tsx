@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { Text, TextInput, Button, SegmentedButtons } from 'react-native-paper';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { signInWithGoogle } from '@/lib/auth/google';
 import { colors, spacing } from '@/lib/theme';
 
 type LoginMethod = 'phone' | 'email';
@@ -13,18 +16,65 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const fetchProfile = useAuthStore((s) => s.fetchProfile);
+  const insets = useSafeAreaInsets();
+
+  const handleGoogleSignInUnified = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      if (BYPASS_AUTH) {
+        await useAuthStore.getState().mockGoogleLogin();
+        setIsLoading(false);
+        return;
+      }
+      const success = await signInWithGoogle();
+      if (success) {
+        await fetchProfile();
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Google sign-in failed';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSendOTP = async () => {
     setError('');
     setIsLoading(true);
 
     try {
+      if (BYPASS_AUTH) {
+        const cleaned = phone.replace(/[^\d+]/g, '');
+        const formattedPhone = cleaned.startsWith('+') ? cleaned : `+233${cleaned.replace(/^0/, '')}`;
+        const identifier = method === 'phone' ? formattedPhone : email.trim();
+
+        useAuthStore.getState().setMockTempData({
+          identifier,
+          method,
+          fullName: 'Beta Tester',
+          phone: formattedPhone,
+        });
+
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: { method, identifier },
+        });
+        setIsLoading(false);
+        return;
+      }
+
       if (method === 'phone') {
         if (!phone.trim()) {
           setError('Please enter your phone number');
+          setIsLoading(false);
           return;
         }
-        const formattedPhone = phone.startsWith('+') ? phone : `+233${phone.replace(/^0/, '')}`;
+        // Clean phone input
+        const cleaned = phone.replace(/[^\d+]/g, '');
+        const formattedPhone = cleaned.startsWith('+') ? cleaned : `+233${cleaned.replace(/^0/, '')}`;
+        
         const { error: otpError } = await supabase.auth.signInWithOtp({
           phone: formattedPhone,
         });
@@ -36,6 +86,7 @@ export default function LoginScreen() {
       } else {
         if (!email.trim()) {
           setError('Please enter your email');
+          setIsLoading(false);
           return;
         }
         const { error: otpError } = await supabase.auth.signInWithOtp({
@@ -48,7 +99,14 @@ export default function LoginScreen() {
         });
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send OTP';
+      let message = err instanceof Error ? err.message : 'Failed to send OTP';
+      if (
+        message.toLowerCase().includes('unsupported phone provider') ||
+        message.toLowerCase().includes('carrier') ||
+        message.toLowerCase().includes('sms')
+      ) {
+        message = 'Your SMS provider/carrier is unsupported. Please switch to the "Email" tab above to log in with your email address.';
+      }
       setError(message);
     } finally {
       setIsLoading(false);
@@ -57,10 +115,19 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top, 24) + 24,
+            paddingBottom: Math.max(insets.bottom, 24) + 16,
+          }
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <Text style={styles.title} variant="headlineMedium">
             Welcome back
@@ -133,6 +200,22 @@ export default function LoginScreen() {
           Send OTP Code
         </Button>
 
+        <View style={styles.divider}>
+          <Text style={styles.dividerText}>or continue with</Text>
+        </View>
+
+        <Button
+          mode="outlined"
+          onPress={handleGoogleSignInUnified}
+          loading={isLoading}
+          disabled={isLoading}
+          icon="google"
+          style={styles.googleBtn}
+          contentStyle={styles.googleBtnContent}
+        >
+          Continue with Google
+        </Button>
+
         <Button
           mode="text"
           onPress={() => router.push('/(auth)/register')}
@@ -154,8 +237,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: 80,
-    paddingBottom: 40,
   },
   header: {
     marginBottom: spacing.xl,
@@ -195,5 +276,25 @@ const styles = StyleSheet.create({
   },
   linkBtn: {
     marginTop: spacing.md,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.lg,
+    gap: spacing.md,
+  },
+  dividerText: {
+    color: colors.onSurfaceVariant,
+    fontSize: 12,
+    flex: 1,
+    textAlign: 'center',
+  },
+  googleBtn: {
+    borderColor: colors.outline,
+    borderRadius: 12,
+    marginBottom: spacing.md,
+  },
+  googleBtnContent: {
+    paddingVertical: 10,
   },
 });

@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button, Card, Divider } from 'react-native-paper';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import type { Booking } from '@/lib/database.types';
 import StatusBadge from '@/components/StatusBadge';
@@ -23,6 +23,16 @@ export default function BookingDetailScreen() {
 
   const loadBooking = async () => {
     if (!id) return;
+
+    if (BYPASS_AUTH) {
+      const activeItem = useBookingStore.getState().activeBookings.find(b => b.id === id);
+      const pastItem = useBookingStore.getState().pastBookings.find(b => b.id === id);
+      const availItem = useBookingStore.getState().availableJobs.find(b => b.id === id);
+      setBooking(activeItem || pastItem || availItem || null);
+      setIsLoading(false);
+      return;
+    }
+
     const { data } = await supabase
       .from('bookings')
       .select(`

@@ -17,6 +17,7 @@ export default function EarningsScreen() {
 
   useEffect(() => {
     if (profile?.id) {
+      // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
       fetchCleanerEarnings(profile.id).then(setEarnings);
     }
   }, [profile?.id]);

@@ -1,12 +1,25 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { Text, Button } from 'react-native-paper';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '@/lib/theme';
 
 export default function WelcomeScreen() {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[
+        styles.scrollContent,
+        {
+          paddingTop: Math.max(insets.top, 24) + 16,
+          paddingBottom: Math.max(insets.bottom, 24) + 16,
+        }
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.hero}>
         <Text style={styles.emoji}>🧹</Text>
         <Text style={styles.title} variant="headlineLarge">
@@ -47,7 +60,7 @@ export default function WelcomeScreen() {
           Already have an account? Sign in
         </Button>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -66,10 +79,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: spacing.lg,
     justifyContent: 'space-between',
-    paddingTop: 80,
-    paddingBottom: 40,
   },
   hero: {
     alignItems: 'center',

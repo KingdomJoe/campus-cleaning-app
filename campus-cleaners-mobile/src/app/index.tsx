@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/lib/theme';
 
 export default function IndexScreen() {
-  const { isLoading, isInitialized, session, role } = useAuthStore();
+  const { isLoading, isInitialized, session, role, profile } = useAuthStore();
 
   useEffect(() => {
     if (!isInitialized || isLoading) return;
@@ -16,12 +16,18 @@ export default function IndexScreen() {
       return;
     }
 
+    // If role is not selected, or profile phone is missing (incomplete onboarding), redirect to role selection
+    if (!role || !profile?.phone) {
+      router.replace('/(auth)/register');
+      return;
+    }
+
     if (role === 'cleaner') {
       router.replace('/(cleaner)/jobs');
     } else {
       router.replace('/(client)/home');
     }
-  }, [isInitialized, isLoading, session, role]);
+  }, [isInitialized, isLoading, session, role, profile]);
 
   return (
     <View style={styles.container}>

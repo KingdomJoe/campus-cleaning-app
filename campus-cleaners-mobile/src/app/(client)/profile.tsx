@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Text, Button, Card, Avatar, Divider } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
@@ -36,9 +36,15 @@ export default function ProfileScreen() {
           <Divider style={styles.divider} />
           <InfoRow icon="📧" label="Email" value={profile?.email ?? '—'} />
           <Divider style={styles.divider} />
-          <InfoRow icon="📍" label="Location" value={profile?.location ?? 'Not set'} />
-          <Divider style={styles.divider} />
-          <InfoRow icon="🪪" label="Ghana Card" value={profile?.ghana_card_number ?? 'Not provided'} />
+          <Pressable onPress={() => router.push('/(client)/settings/location' as any)}>
+            <InfoRow icon="📍" label="Location (Tap to change)" value={profile?.location ?? 'Not set'} />
+          </Pressable>
+          {profile?.room_number && (
+            <>
+              <Divider style={styles.divider} />
+              <InfoRow icon="🚪" label="Room Number" value={profile.room_number} />
+            </>
+          )}
         </Card.Content>
       </Card>
 

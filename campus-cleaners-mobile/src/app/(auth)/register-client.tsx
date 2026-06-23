@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, TextInput, Button } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { Text, TextInput, Button, SegmentedButtons } from 'react-native-paper';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
 import { colors, spacing } from '@/lib/theme';
 
 export default function RegisterClientScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [ghanaCard, setGhanaCard] = useState('');
-  const [location, setLocation] = useState('');
+  const [verificationMethod, setVerificationMethod] = useState<'phone' | 'email'>('email');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const insets = useSafeAreaInsets();
 
   const handleRegister = async () => {
     if (!fullName.trim() || !phone.trim() || !email.trim()) {
@@ -25,29 +26,99 @@ export default function RegisterClientScreen() {
     setIsLoading(true);
 
     try {
-      const formattedPhone = phone.startsWith('+') ? phone : `+233${phone.replace(/^0/, '')}`;
+      // Clean phone input (remove spaces, parentheses, etc.)
+      const cleaned = phone.replace(/[^\d+]/g, '');
+      const formattedPhone = cleaned.startsWith('+') ? cleaned : `+233${cleaned.replace(/^0/, '')}`;
 
-      // Sign up with phone OTP
-      const { data, error: signUpError } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-            phone: formattedPhone,
-            email: email.trim(),
-            role: 'client',
+      // Validate Ghana phone number format (checking +233 followed by exactly 9 digits)
+      const ghanaPhoneRegex = /^\+233\d{9}$/;
+      if (!ghanaPhoneRegex.test(formattedPhone)) {
+        setError('Please enter a valid Ghana mobile number (e.g., 024 123 4567 or 055 123 4567)');
+        setIsLoading(false);
+        return;
+      }
+
+      if (BYPASS_AUTH) {
+        useAuthStore.getState().setMockTempData({
+          identifier: email.trim(),
+          method: 'email',
+          fullName: fullName.trim(),
+          phone: formattedPhone,
+        });
+
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: {
+            method: 'email',
+            identifier: email.trim(),
           },
-        },
-      });
+        });
+        setIsLoading(false);
+        return;
+      }
 
-      if (signUpError) throw signUpError;
+      // Sign up with OTP
+      let signUpResult;
+      let usedMethod = verificationMethod;
+      if (verificationMethod === 'phone') {
+        try {
+          signUpResult = await supabase.auth.signInWithOtp({
+            phone: formattedPhone,
+            options: {
+              shouldCreateUser: true,
+              data: {
+                full_name: fullName.trim(),
+                phone: formattedPhone,
+                email: email.trim(),
+                role: 'client',
+              },
+            },
+          });
+          if (signUpResult.error) throw signUpResult.error;
+        } catch (phoneErr: any) {
+          console.warn('SMS OTP signup failed, falling back to Email OTP:', phoneErr.message);
+          usedMethod = 'email';
+          signUpResult = await supabase.auth.signInWithOtp({
+            email: email.trim(),
+            options: {
+              shouldCreateUser: true,
+              data: {
+                full_name: fullName.trim(),
+                phone: formattedPhone,
+                email: email.trim(),
+                role: 'client',
+              },
+            },
+          });
+          if (signUpResult.error) throw signUpResult.error;
+
+          Alert.alert(
+            'SMS Verification Unavailable',
+            'Your carrier is unsupported for SMS OTP. We have sent a verification code to your Email instead.'
+          );
+        }
+      } else {
+        signUpResult = await supabase.auth.signInWithOtp({
+          email: email.trim(),
+          options: {
+            shouldCreateUser: true,
+            data: {
+              full_name: fullName.trim(),
+              phone: formattedPhone,
+              email: email.trim(),
+              role: 'client',
+            },
+          },
+        });
+        if (signUpResult.error) throw signUpResult.error;
+      }
 
       // Navigate to OTP verification
       router.push({
         pathname: '/(auth)/verify-otp',
         params: {
-          method: 'phone',
-          identifier: formattedPhone,
+          method: usedMethod,
+          identifier: usedMethod === 'phone' ? formattedPhone : email.trim(),
         },
       });
     } catch (err: unknown) {
@@ -58,12 +129,69 @@ export default function RegisterClientScreen() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setIsLoading(true);
+
+    try {
+      if (BYPASS_AUTH) {
+        await useAuthStore.getState().mockGoogleLogin();
+        setIsLoading(false);
+        return;
+      }
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: 'campuscleaners://auth/callback',
+          queryParams: {
+            role: 'client',
+          },
+        },
+      });
+
+      if (error) throw error;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Google sign-in failed';
+      setError(message);
+      setIsLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top, 24) + 24,
+            paddingBottom: Math.max(insets.bottom, 24) + 16,
+          }
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.divider}>
+          <Text style={styles.dividerText}>or continue with</Text>
+        </View>
+
+        <Button
+          mode="outlined"
+          onPress={handleGoogleSignIn}
+          loading={isLoading}
+          disabled={isLoading}
+          icon="google"
+          style={styles.googleBtn}
+          contentStyle={styles.googleBtnContent}
+        >
+          Continue with Google
+        </Button>
+
+        <View style={styles.divider}>
+          <Text style={styles.dividerText}>or register with details</Text>
+        </View>
+
         <Text style={styles.title} variant="headlineMedium">
           Create Client Account
         </Text>
@@ -97,6 +225,7 @@ export default function RegisterClientScreen() {
             activeOutlineColor={colors.primary}
             textColor={colors.onSurface}
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+            placeholder="24 123 4567"
           />
 
           <TextInput
@@ -114,34 +243,21 @@ export default function RegisterClientScreen() {
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
           />
 
-          <TextInput
-            label="Ghana Card Number"
-            value={ghanaCard}
-            onChangeText={setGhanaCard}
-            mode="outlined"
-            left={<TextInput.Icon icon="card-account-details" />}
-            placeholder="GHA-XXXXXXXXX-X"
-            style={styles.input}
-            outlineColor={colors.outline}
-            activeOutlineColor={colors.primary}
-            textColor={colors.onSurface}
-            theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-          />
-
-          <TextInput
-            label="Location"
-            value={location}
-            onChangeText={setLocation}
-            mode="outlined"
-            left={<TextInput.Icon icon="map-marker" />}
-            placeholder="e.g., Amamoma, Room B204"
-            style={styles.input}
-            outlineColor={colors.outline}
-            activeOutlineColor={colors.primary}
-            textColor={colors.onSurface}
-            theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+          <Text style={styles.sectionLabel} variant="labelMedium">
+            Verification Method *
+          </Text>
+          <SegmentedButtons
+            value={verificationMethod}
+            onValueChange={(v) => setVerificationMethod(v as 'phone' | 'email')}
+            buttons={[
+              { value: 'email', label: '📧 Email OTP' },
+              { value: 'phone', label: '📱 SMS OTP' },
+            ]}
+            style={styles.segment}
+            theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
           />
         </View>
+
 
         {error ? (
           <Text style={styles.error} variant="bodySmall">
@@ -180,9 +296,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
-    paddingBottom: 40,
   },
   title: {
     color: colors.white,
@@ -200,6 +315,26 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: colors.surfaceVariant,
   },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.lg,
+    gap: spacing.md,
+  },
+  dividerText: {
+    color: colors.onSurfaceVariant,
+    fontSize: 12,
+    flex: 1,
+    textAlign: 'center',
+  },
+  googleBtn: {
+    borderColor: colors.outline,
+    borderRadius: 12,
+    marginBottom: spacing.md,
+  },
+  googleBtnContent: {
+    paddingVertical: 10,
+  },
   error: {
     color: colors.error,
     marginBottom: spacing.md,
@@ -214,5 +349,14 @@ const styles = StyleSheet.create({
   btnLabel: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  sectionLabel: {
+    color: colors.primary,
+    fontWeight: '600',
+    marginTop: spacing.sm,
+  },
+  segment: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
 });

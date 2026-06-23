@@ -45,6 +45,7 @@ export async function submitReview(params: {
   // Update cleaner's average rating
   await updateCleanerAvgRating(params.cleanerId);
 
+  // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
   return data;
 }
 
@@ -66,6 +67,7 @@ export async function fetchCleanerReviews(cleanerId: string): Promise<Review[]> 
     return [];
   }
 
+  // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
   return data ?? [];
 }
 
@@ -80,6 +82,7 @@ export async function fetchBookingReview(bookingId: string): Promise<Review | nu
     .single();
 
   if (error) return null;
+  // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
   return data;
 }
 

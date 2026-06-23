@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Text, Button, Card, Avatar, Divider, Chip } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
@@ -66,7 +66,16 @@ export default function CleanerProfileScreen() {
           <Divider style={styles.divider} />
           <InfoRow icon="📱" label="Phone" value={profile?.phone ?? '—'} />
           <InfoRow icon="📧" label="Email" value={profile?.email ?? '—'} />
-          <InfoRow icon="📍" label="Location" value={profile?.location ?? 'Not set'} />
+          <Pressable onPress={() => router.push('/(cleaner)/settings/location' as any)}>
+            <InfoRow icon="📍" label="Location (Tap to change)" value={profile?.location ?? 'Not set'} />
+          </Pressable>
+          {cleanerProfile?.current_lat && cleanerProfile?.current_lng && (
+            <InfoRow 
+              icon="🌐" 
+              label="GPS Coordinates" 
+              value={`${cleanerProfile.current_lat.toFixed(4)}, ${cleanerProfile.current_lng.toFixed(4)}`} 
+            />
+          )}
         </Card.Content>
       </Card>
 

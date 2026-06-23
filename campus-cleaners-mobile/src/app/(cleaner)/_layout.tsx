@@ -59,6 +59,13 @@ export default function CleanerLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="settings/location"
+        options={{
+          href: null,
+          title: 'Location Settings',
+        }}
+      />
     </Tabs>
   );
 }

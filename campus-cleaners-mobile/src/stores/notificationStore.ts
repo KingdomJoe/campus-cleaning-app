@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AppNotification } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
+import { BYPASS_AUTH } from './authStore';
 
 interface NotificationState {
   notifications: AppNotification[];
@@ -21,6 +22,36 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   fetchNotifications: async (userId) => {
     set({ isLoading: true });
     try {
+      if (BYPASS_AUTH) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const currentNotifs = get().notifications;
+        if (currentNotifs.length === 0) {
+          const mockNotifs: AppNotification[] = [
+            {
+              id: 'n-1',
+              user_id: userId,
+              title: 'Welcome to Campus Cleaners! 🎉',
+              body: 'Your account is active. Start booking verified cleaners and laundry services.',
+              read: false,
+              data: null,
+              created_at: new Date().toISOString(),
+            },
+            {
+              id: 'n-2',
+              user_id: userId,
+              title: 'Job Accepted 🧹',
+              body: 'Grace Osei has accepted your cleaning request for June 25th.',
+              read: true,
+              data: null,
+              created_at: new Date(Date.now() - 3600000).toISOString(),
+            }
+          ];
+          set({ notifications: mockNotifs, unreadCount: 1 });
+        }
+        set({ isLoading: false });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
@@ -31,7 +62,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       if (error) throw error;
 
       const notifications = data ?? [];
+      // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
       const unreadCount = notifications.filter((n) => !n.read).length;
+      // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
       set({ notifications, unreadCount });
     } catch (err) {
       console.error('Error fetching notifications:', err);
@@ -42,6 +75,19 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   markAsRead: async (notificationId) => {
     try {
+      if (BYPASS_AUTH) {
+        set((state) => {
+          const notifications = state.notifications.map((n) =>
+            n.id === notificationId ? { ...n, read: true } : n
+          );
+          return {
+            notifications,
+            unreadCount: notifications.filter((n) => !n.read).length,
+          };
+        });
+        return;
+      }
+
       await supabase
         .from('notifications')
         .update({ read: true })
@@ -63,6 +109,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   markAllAsRead: async (userId) => {
     try {
+      if (BYPASS_AUTH) {
+        set((state) => ({
+          notifications: state.notifications.map((n) => ({ ...n, read: true })),
+          unreadCount: 0,
+        }));
+        return;
+      }
+
       await supabase
         .from('notifications')
         .update({ read: true })

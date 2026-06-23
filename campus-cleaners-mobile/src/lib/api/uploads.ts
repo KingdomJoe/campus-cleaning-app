@@ -130,6 +130,7 @@ export async function uploadDocument(
   if (publicUrl) {
     await supabase.from('cleaner_documents').insert({
       cleaner_id: cleanerId,
+      // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
       document_type: documentType,
       file_url: publicUrl,
     });

@@ -176,21 +176,25 @@ export interface Dispute {
   created_at: string;
 }
 
-// Supabase Database type structure (simplified)
-export interface Database {
+// Schema types needed for Supabase type resolution
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+export type Database = {
   public: {
-    Tables: {
-      profiles: { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile> };
-      cleaner_profiles: { Row: CleanerProfile; Insert: Partial<CleanerProfile>; Update: Partial<CleanerProfile> };
-      cleaner_documents: { Row: CleanerDocument; Insert: Partial<CleanerDocument>; Update: Partial<CleanerDocument> };
-      service_types: { Row: ServiceType; Insert: Partial<ServiceType>; Update: Partial<ServiceType> };
-      bookings: { Row: Booking; Insert: Partial<Booking>; Update: Partial<Booking> };
-      booking_photos: { Row: BookingPhoto; Insert: Partial<BookingPhoto>; Update: Partial<BookingPhoto> };
-      messages: { Row: Message; Insert: Partial<Message>; Update: Partial<Message> };
-      reviews: { Row: Review; Insert: Partial<Review>; Update: Partial<Review> };
-      payments: { Row: Payment; Insert: Partial<Payment>; Update: Partial<Payment> };
-      notifications: { Row: AppNotification; Insert: Partial<AppNotification>; Update: Partial<AppNotification> };
-      disputes: { Row: Dispute; Insert: Partial<Dispute>; Update: Partial<Dispute> };
+    Tables: Record<string, { Row: Record<string, unknown>; Insert: Record<string, unknown>; Update: Record<string, unknown>; Relationships: [] }> & {
+      profiles:                { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile>; Relationships: [] };
+      cleaner_profiles:        { Row: CleanerProfile; Insert: Partial<CleanerProfile>; Update: Partial<CleanerProfile>; Relationships: [] };
+      cleaner_documents:       { Row: CleanerDocument; Insert: Partial<CleanerDocument>; Update: Partial<CleanerDocument>; Relationships: [] };
+      service_types:           { Row: ServiceType; Insert: Partial<ServiceType>; Update: Partial<ServiceType>; Relationships: [] };
+      bookings:                { Row: Booking; Insert: Partial<Booking>; Update: Partial<Booking>; Relationships: [] };
+      booking_photos:          { Row: BookingPhoto; Insert: Partial<BookingPhoto>; Update: Partial<BookingPhoto>; Relationships: [] };
+      messages:                { Row: Message; Insert: Partial<Message>; Update: Partial<Message>; Relationships: [] };
+      reviews:                 { Row: Review; Insert: Partial<Review>; Update: Partial<Review>; Relationships: [] };
+      payments:                { Row: Payment; Insert: Partial<Payment>; Update: Partial<Payment>; Relationships: [] };
+      notifications:           { Row: AppNotification; Insert: Partial<AppNotification>; Update: Partial<AppNotification>; Relationships: [] };
+      disputes:                { Row: Dispute; Insert: Partial<Dispute>; Update: Partial<Dispute>; Relationships: [] };
     };
+    Views: Record<string, { Row: Record<string, unknown>; Insert: Record<string, unknown>; Update: Record<string, unknown>; Relationships: [] }>;
+    Functions: Record<string, { Args: Record<string, unknown>; Returns: unknown }>;
   };
-}
+};
