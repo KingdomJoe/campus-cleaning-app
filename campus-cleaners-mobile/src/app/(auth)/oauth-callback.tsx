@@ -70,8 +70,13 @@ export default function OAuthCallbackScreen() {
           await SecureStore.deleteItemAsync('registration_role');
         }
 
-        // Redirect to index route
-        router.replace('/');
+        // Redirect directly to app screen based on role (bypass index.tsx routing race condition)
+        const finalRole = validRole || currentProfile?.role;
+        if (finalRole === 'cleaner') {
+          router.replace('/(cleaner)/jobs');
+        } else {
+          router.replace('/(client)/home');
+        }
       } catch (err) {
         console.error('Error handling oauth callback:', err);
         router.replace('/(auth)/login');

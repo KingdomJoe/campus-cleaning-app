@@ -29,7 +29,7 @@ export default function RegisterCleanerScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isPasswordValid, setIsPasswordValid] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState<'phone' | 'email_pass' | 'email_otp'>('email_pass');
+  const [verificationMethod, setVerificationMethod] = useState<'email_pass' | 'email_otp'>('email_pass');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedRole, setSelectedRole] = useState<'client' | 'cleaner'>('cleaner');
@@ -99,51 +99,10 @@ export default function RegisterCleanerScreen() {
       } else {
         // Normal signup with OTP
         let signUpResult;
-        let usedMethod: 'phone' | 'email' = 'phone';
-        let verifyType: 'sms' | 'email' | 'signup' = 'sms';
+        let usedMethod: 'email' = 'email';
+        let verifyType: 'email' | 'signup' = 'email';
 
-        if (verificationMethod === 'phone') {
-          usedMethod = 'phone';
-          verifyType = 'sms';
-          try {
-            signUpResult = await supabase.auth.signInWithOtp({
-              phone: formattedPhone,
-              options: {
-                shouldCreateUser: true,
-                data: {
-                  full_name: fullName.trim(),
-                  phone: formattedPhone,
-                  email: email.trim(),
-                  role: 'cleaner',
-                },
-              },
-            });
-            if (signUpResult.error) throw signUpResult.error;
-          } catch (phoneErr: any) {
-            console.warn('SMS OTP signup failed, falling back to Email OTP:', phoneErr.message);
-            usedMethod = 'email';
-            verifyType = 'email';
-            signUpResult = await supabase.auth.signInWithOtp({
-              email: email.trim(),
-              options: {
-                shouldCreateUser: true,
-                data: {
-                  full_name: fullName.trim(),
-                  phone: formattedPhone,
-                  email: email.trim(),
-                  role: 'cleaner',
-                },
-              },
-            });
-            if (signUpResult.error) throw signUpResult.error;
-
-            Alert.alert(
-              'SMS Verification Unavailable',
-              'Your carrier is unsupported for SMS OTP. We have sent a verification code to your Email instead.'
-            );
-          }
-        } else if (verificationMethod === 'email_otp') {
-          usedMethod = 'email';
+        if (verificationMethod === 'email_otp') {
           verifyType = 'email';
           signUpResult = await supabase.auth.signInWithOtp({
             email: email.trim(),
@@ -161,7 +120,6 @@ export default function RegisterCleanerScreen() {
           if (signUpResult.error) throw signUpResult.error;
         } else {
           // email_pass
-          usedMethod = 'email';
           verifyType = 'signup';
           if (!password) {
             setError('Please enter a password');
@@ -194,7 +152,7 @@ export default function RegisterCleanerScreen() {
           pathname: '/(auth)/verify-otp',
           params: {
             method: usedMethod,
-            identifier: usedMethod === 'phone' ? formattedPhone : email.trim(),
+            identifier: email.trim(),
             type: verifyType,
           },
         });
@@ -372,11 +330,10 @@ export default function RegisterCleanerScreen() {
               </Text>
               <SegmentedButtons
                 value={verificationMethod}
-                onValueChange={(v) => setVerificationMethod(v as 'phone' | 'email_pass' | 'email_otp')}
+                onValueChange={(v) => setVerificationMethod(v as 'email_pass' | 'email_otp')}
                 buttons={[
-                  { value: 'email_pass', label: '📧 Email & Pass' },
+                  { value: 'email_pass', label: '📧 Email & Password' },
                   { value: 'email_otp', label: '✉️ Email OTP' },
-                  { value: 'phone', label: '📱 SMS OTP' },
                 ]}
                 style={styles.segment}
                 theme={{ colors: { secondaryContainer: colors.primaryContainer } }}

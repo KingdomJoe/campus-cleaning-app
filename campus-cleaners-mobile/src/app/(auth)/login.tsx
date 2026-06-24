@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
-import { Text, TextInput, Button, SegmentedButtons, useTheme } from 'react-native-paper';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Text, TextInput, Button, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
@@ -10,14 +10,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { signInWithGoogle } from '@/lib/auth/google';
 import { colors, spacing } from '@/lib/theme';
 
-type LoginMethod = 'phone' | 'email';
-
 export default function LoginScreen() {
   const theme = useTheme();
-  const [method, setMethod] = useState<LoginMethod>('phone');
-  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [emailLoginMethod, setEmailLoginMethod] = useState<'password' | 'otp'>('password');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,77 +42,64 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      if (method === 'phone') {
-        if (!phone.trim()) {
-          setError('Please enter your phone number');
-          setIsLoading(false);
-          return;
-        }
-        // Clean phone input
-        const cleaned = phone.replace(/[^\d+]/g, '');
-        const formattedPhone = cleaned.startsWith('+') ? cleaned : `+233${cleaned.replace(/^0/, '')}`;
-        
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          phone: formattedPhone,
-        });
-        if (otpError) throw otpError;
-        router.push({
-          pathname: '/(auth)/verify-otp',
-          params: { method: 'phone', identifier: formattedPhone },
-        });
+      if (!email.trim()) {
+        setError('Please enter your email');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!password) {
+        setError('Please enter your password');
+        setIsLoading(false);
+        return;
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
+      if (signInError) throw signInError;
+
+      // Successful password login, fetch profile and redirect
+      await fetchProfile();
+      const role = useAuthStore.getState().role;
+      if (!role) {
+        router.replace('/(auth)/register');
+      } else if (role === 'cleaner') {
+        router.replace('/(cleaner)/jobs');
       } else {
-        if (!email.trim()) {
-          setError('Please enter your email');
-          setIsLoading(false);
-          return;
-        }
-
-        if (emailLoginMethod === 'password') {
-          if (!password) {
-            setError('Please enter your password');
-            setIsLoading(false);
-            return;
-          }
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password: password,
-          });
-          if (signInError) throw signInError;
-
-          // Successful password login, fetch profile and redirect
-          await fetchProfile();
-          const role = useAuthStore.getState().role;
-          if (!role) {
-            router.replace('/(auth)/register');
-          } else if (role === 'cleaner') {
-            router.replace('/(cleaner)/jobs');
-          } else {
-            router.replace('/(client)/home');
-          }
-        } else {
-          // Magic link (email OTP)
-          const { error: otpError } = await supabase.auth.signInWithOtp({
-            email: email.trim(),
-            options: {
-              emailRedirectTo: Linking.createURL('auth/callback'),
-            }
-          });
-          if (otpError) throw otpError;
-          router.push({
-            pathname: '/(auth)/verify-otp',
-            params: { method: 'email', identifier: email.trim() },
-          });
-        }
+        router.replace('/(client)/home');
       }
     } catch (err: unknown) {
-      let message = err instanceof Error ? err.message : 'Authentication failed';
-      if (
-        message.toLowerCase().includes('unsupported phone provider') ||
-        message.toLowerCase().includes('carrier') ||
-        message.toLowerCase().includes('sms')
-      ) {
-        message = 'Your SMS provider/carrier is unsupported. Please switch to the "Email" tab above to log in with your email address.';
+      const message = err instanceof Error ? err.message : 'Authentication failed';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailOTP = async () => {
+    setError('');
+    setIsLoading(true);
+
+    try {
+      if (!email.trim()) {
+        setError('Please enter your email');
+        setIsLoading(false);
+        return;
       }
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          emailRedirectTo: Linking.createURL('auth/callback'),
+        }
+      });
+      if (otpError) throw otpError;
+      router.push({
+        pathname: '/(auth)/verify-otp',
+        params: { method: 'email', identifier: email.trim(), type: 'email' },
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send verification email';
       setError(message);
     } finally {
       setIsLoading(false);
@@ -144,88 +126,47 @@ export default function LoginScreen() {
             Welcome back
           </Text>
           <Text style={styles.subtitle} variant="bodyLarge">
-            Sign in with your phone or email
+            Sign in with your email
           </Text>
         </View>
 
-        <SegmentedButtons
-          value={method}
-          onValueChange={(v) => setMethod(v as LoginMethod)}
-          buttons={[
-            { value: 'phone', label: '📱 Phone', style: styles.segmentBtn },
-            { value: 'email', label: '📧 Email', style: styles.segmentBtn },
-          ]}
-          style={styles.segment}
-          theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
-        />
-
-        {method === 'phone' ? (
+        <View style={{ gap: spacing.md }}>
           <TextInput
-            label="Phone number"
-            placeholder="024 XXX XXXX"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
+            label="Email address"
+            placeholder="you@student.edu"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
             mode="outlined"
-            left={<TextInput.Affix text="+233" />}
+            left={<TextInput.Icon icon="email-outline" />}
             style={styles.input}
             outlineColor={colors.outline}
             activeOutlineColor={colors.primary}
             textColor={colors.onSurface}
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
           />
-        ) : (
-          <View style={{ gap: spacing.md }}>
-            <TextInput
-              label="Email address"
-              placeholder="you@student.edu"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              mode="outlined"
-              left={<TextInput.Icon icon="email-outline" />}
-              style={styles.input}
-              outlineColor={colors.outline}
-              activeOutlineColor={colors.primary}
-              textColor={colors.onSurface}
-              theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-            />
 
-            <SegmentedButtons
-              value={emailLoginMethod}
-              onValueChange={(v) => setEmailLoginMethod(v as 'password' | 'otp')}
-              buttons={[
-                { value: 'password', label: '🔒 Password' },
-                { value: 'otp', label: '✉️ Magic Link' },
-              ]}
-              style={styles.emailMethodSegment}
-              theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
-            />
-
-            {emailLoginMethod === 'password' && (
-              <TextInput
-                label="Password"
-                value={password}
-                onChangeText={password => setPassword(password)}
-                secureTextEntry={!showPassword}
-                mode="outlined"
-                left={<TextInput.Icon icon="lock-outline" />}
-                right={
-                  <TextInput.Icon
-                    icon={showPassword ? 'eye-off' : 'eye'}
-                    onPress={() => setShowPassword(!showPassword)}
-                  />
-                }
-                style={styles.input}
-                outlineColor={colors.outline}
-                activeOutlineColor={colors.primary}
-                textColor={colors.onSurface}
-                theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+          <TextInput
+            label="Password"
+            value={password}
+            onChangeText={password => setPassword(password)}
+            secureTextEntry={!showPassword}
+            mode="outlined"
+            left={<TextInput.Icon icon="lock-outline" />}
+            right={
+              <TextInput.Icon
+                icon={showPassword ? 'eye-off' : 'eye'}
+                onPress={() => setShowPassword(!showPassword)}
               />
-            )}
-          </View>
-        )}
+            }
+            style={styles.input}
+            outlineColor={colors.outline}
+            activeOutlineColor={colors.primary}
+            textColor={colors.onSurface}
+            theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+          />
+        </View>
 
         {error ? (
           <Text style={styles.error} variant="bodySmall">
@@ -243,11 +184,19 @@ export default function LoginScreen() {
           labelStyle={styles.btnLabel}
           buttonColor={colors.primary}
         >
-          {method === 'phone'
-            ? 'Send OTP Code'
-            : emailLoginMethod === 'password'
-            ? 'Sign In'
-            : 'Send Magic Link'}
+          Sign In
+        </Button>
+
+        <Button
+          mode="outlined"
+          onPress={handleEmailOTP}
+          loading={isLoading}
+          disabled={isLoading}
+          style={styles.btn}
+          contentStyle={styles.btnContent}
+          labelStyle={styles.btnLabel}
+        >
+          Continue with Email OTP
         </Button>
 
         <View style={styles.divider}>
