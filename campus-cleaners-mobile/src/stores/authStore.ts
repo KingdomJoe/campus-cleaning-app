@@ -4,7 +4,7 @@ import type { Profile, CleanerProfile, UserRole } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 
 // Change to false to re-enable live Supabase Auth and Database queries
-export const BYPASS_AUTH = true;
+export const BYPASS_AUTH = false;
 
 interface AuthState {
   session: Session | null;
