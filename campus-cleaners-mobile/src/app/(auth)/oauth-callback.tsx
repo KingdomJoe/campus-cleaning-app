@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -10,12 +11,24 @@ export default function OAuthCallbackScreen() {
   const params = useLocalSearchParams<{ access_token?: string; refresh_token?: string }>();
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
   const theme = useTheme();
+  const url = Linking.useURL();
 
   useEffect(() => {
     async function handleSession() {
       try {
-        const accessToken = params.access_token;
-        const refreshToken = params.refresh_token;
+        let accessToken = params.access_token;
+        let refreshToken = params.refresh_token;
+
+        if ((!accessToken || !refreshToken) && url) {
+          const hash = url.split('#')[1] || url.split('?')[1];
+          if (hash) {
+            const parsedParams = Object.fromEntries(
+              hash.split('&').map((pair) => pair.split('='))
+            );
+            accessToken = parsedParams.access_token;
+            refreshToken = parsedParams.refresh_token;
+          }
+        }
 
         let activeSession = null;
         const { data: { session } } = await supabase.auth.getSession();

@@ -22,9 +22,10 @@ export default function RegisterClientScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isPasswordValid, setIsPasswordValid] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState<'phone' | 'email'>('email');
+  const [verificationMethod, setVerificationMethod] = useState<'phone' | 'email_pass' | 'email_otp'>('email_pass');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'client' | 'cleaner'>('client');
   const insets = useSafeAreaInsets();
 
   // Prefill details if Google OAuth has established a session
@@ -68,18 +69,35 @@ export default function RegisterClientScreen() {
           .update({
             full_name: fullName.trim(),
             phone: formattedPhone,
+            role: selectedRole,
           })
           .eq('id', user.id);
 
         if (updateError) throw updateError;
 
+        if (selectedRole === 'cleaner') {
+          const { error: profileError } = await supabase
+            .from('cleaner_profiles')
+            .upsert({ user_id: user.id });
+          if (profileError) throw profileError;
+        }
+
         await fetchProfile();
-        router.replace('/(client)/home');
+        
+        if (selectedRole === 'cleaner') {
+          router.replace('/(cleaner)/jobs');
+        } else {
+          router.replace('/(client)/home');
+        }
       } else {
         // Normal signup with OTP
         let signUpResult;
-        let usedMethod = verificationMethod;
+        let usedMethod: 'phone' | 'email' = 'phone';
+        let verifyType: 'sms' | 'email' | 'signup' = 'sms';
+
         if (verificationMethod === 'phone') {
+          usedMethod = 'phone';
+          verifyType = 'sms';
           try {
             signUpResult = await supabase.auth.signInWithOtp({
               phone: formattedPhone,
@@ -97,6 +115,7 @@ export default function RegisterClientScreen() {
           } catch (phoneErr: any) {
             console.warn('SMS OTP signup failed, falling back to Email OTP:', phoneErr.message);
             usedMethod = 'email';
+            verifyType = 'email';
             signUpResult = await supabase.auth.signInWithOtp({
               email: email.trim(),
               options: {
@@ -116,7 +135,27 @@ export default function RegisterClientScreen() {
               'Your carrier is unsupported for SMS OTP. We have sent a verification code to your Email instead.'
             );
           }
+        } else if (verificationMethod === 'email_otp') {
+          usedMethod = 'email';
+          verifyType = 'email';
+          signUpResult = await supabase.auth.signInWithOtp({
+            email: email.trim(),
+            options: {
+              shouldCreateUser: true,
+              data: {
+                full_name: fullName.trim(),
+                phone: formattedPhone,
+                email: email.trim(),
+                role: 'client',
+              },
+              emailRedirectTo: Linking.createURL('auth/callback'),
+            },
+          });
+          if (signUpResult.error) throw signUpResult.error;
         } else {
+          // email_pass
+          usedMethod = 'email';
+          verifyType = 'signup';
           if (!password) {
             setError('Please enter a password');
             setIsLoading(false);
@@ -149,6 +188,7 @@ export default function RegisterClientScreen() {
           params: {
             method: usedMethod,
             identifier: usedMethod === 'phone' ? formattedPhone : email.trim(),
+            type: verifyType,
           },
         });
       }
@@ -236,7 +276,7 @@ export default function RegisterClientScreen() {
             activeOutlineColor={colors.primary}
             textColor={colors.onSurface}
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-            disabled={!!session} // Google profile supplies the name, though editable if they want (but disable for consistency or keep enabled? Let's keep editable but prefilled)
+            disabled={false} // Allow editing name even if logged in with Google
           />
 
           <TextInput
@@ -270,7 +310,25 @@ export default function RegisterClientScreen() {
             disabled={!!session} // Email is fixed from Google OAuth
           />
 
-          {!session && verificationMethod === 'email' && (
+          {session && (
+            <>
+              <Text style={styles.sectionLabel} variant="labelMedium">
+                I want to join as *
+              </Text>
+              <SegmentedButtons
+                value={selectedRole}
+                onValueChange={(v) => setSelectedRole(v as 'client' | 'cleaner')}
+                buttons={[
+                  { value: 'client', label: '🏠 Client (I need cleaning)' },
+                  { value: 'cleaner', label: '🧹 Cleaner (I\'m a cleaner)' },
+                ]}
+                style={styles.segment}
+                theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
+              />
+            </>
+          )}
+
+          {!session && verificationMethod === 'email_pass' && (
             <View style={{ marginBottom: spacing.md }}>
               <TextInput
                 label="Password *"
@@ -307,9 +365,10 @@ export default function RegisterClientScreen() {
               </Text>
               <SegmentedButtons
                 value={verificationMethod}
-                onValueChange={(v) => setVerificationMethod(v as 'phone' | 'email')}
+                onValueChange={(v) => setVerificationMethod(v as 'phone' | 'email_pass' | 'email_otp')}
                 buttons={[
-                  { value: 'email', label: '📧 Email & Pass' },
+                  { value: 'email_pass', label: '📧 Email & Pass' },
+                  { value: 'email_otp', label: '✉️ Email OTP' },
                   { value: 'phone', label: '📱 SMS OTP' },
                 ]}
                 style={styles.segment}

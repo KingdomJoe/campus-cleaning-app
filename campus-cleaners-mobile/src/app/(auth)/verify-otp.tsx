@@ -14,9 +14,10 @@ const OTP_LENGTH = 6;
 
 export default function VerifyOTPScreen() {
   const theme = useTheme();
-  const { method, identifier } = useLocalSearchParams<{
+  const { method, identifier, type } = useLocalSearchParams<{
     method: 'phone' | 'email';
     identifier: string;
+    type?: 'email' | 'signup';
   }>();
 
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
@@ -153,7 +154,7 @@ export default function VerifyOTPScreen() {
         result = await supabase.auth.verifyOtp({
           email: identifier!,
           token: code,
-          type: 'email',
+          type: type || 'email',
         });
       }
 
@@ -175,19 +176,33 @@ export default function VerifyOTPScreen() {
     setError('');
     try {
       if (method === 'phone') {
-        await supabase.auth.signInWithOtp({ phone: identifier! });
+        const { error: resendErr } = await supabase.auth.signInWithOtp({ phone: identifier! });
+        if (resendErr) throw resendErr;
         Alert.alert('Code Resent', 'A new verification code has been sent to your phone.');
       } else {
-        await supabase.auth.signInWithOtp({
-          email: identifier!,
-          options: {
-            emailRedirectTo: Linking.createURL('auth/callback'),
-          }
-        });
-        Alert.alert('Link Resent', 'A new verification link has been sent to your email.');
+        if (type === 'signup') {
+          const { error: resendErr } = await supabase.auth.resend({
+            type: 'signup',
+            email: identifier!,
+            options: {
+              emailRedirectTo: Linking.createURL('auth/callback'),
+            }
+          });
+          if (resendErr) throw resendErr;
+          Alert.alert('Code Resent', 'A new confirmation email has been sent.');
+        } else {
+          const { error: otpErr } = await supabase.auth.signInWithOtp({
+            email: identifier!,
+            options: {
+              emailRedirectTo: Linking.createURL('auth/callback'),
+            }
+          });
+          if (otpErr) throw otpErr;
+          Alert.alert('Code Resent', 'A new verification email has been sent.');
+        }
       }
-    } catch {
-      setError('Failed to resend verification');
+    } catch (err: any) {
+      setError(err instanceof Error ? err.message : 'Failed to resend verification');
     }
   };
 
