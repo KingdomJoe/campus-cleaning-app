@@ -3,6 +3,7 @@ import { View, StyleSheet, Pressable, Alert, ScrollView } from 'react-native';
 import { Text, Card, Button, ActivityIndicator, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { signInWithGoogle } from '@/lib/auth/google';
@@ -10,13 +11,18 @@ import { colors, spacing, borderRadius } from '@/lib/theme';
 
 export default function RegisterRoleScreen() {
   const { session, profile, fetchProfile } = useAuthStore();
+  const [selectedRole, setSelectedRole] = useState<'client' | 'cleaner' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const insets = useSafeAreaInsets();
   const theme = useTheme();
 
   const handleGoogleSignInUnified = async () => {
+    if (!selectedRole) return;
     setIsLoading(true);
     try {
+      // Store the selected role in SecureStore so the callback knows what to assign
+      await SecureStore.setItemAsync('registration_role', selectedRole);
+      
       const success = await signInWithGoogle();
       if (success) {
         await fetchProfile();
@@ -64,11 +70,15 @@ export default function RegisterRoleScreen() {
         setIsLoading(false);
       }
     } else {
-      if (role === 'cleaner') {
-        router.push('/(auth)/register-cleaner');
-      } else {
-        router.push('/(auth)/register-client');
-      }
+      setSelectedRole(role);
+    }
+  };
+
+  const handleManualRegister = () => {
+    if (selectedRole === 'cleaner') {
+      router.push('/(auth)/register-cleaner');
+    } else {
+      router.push('/(auth)/register-client');
     }
   };
 
@@ -89,7 +99,11 @@ export default function RegisterRoleScreen() {
           {session ? 'Complete Your Account' : 'Join Uber for Cleaning'}
         </Text>
         <Text style={styles.subtitle} variant="bodyLarge">
-          {session ? 'Select your role to complete setup' : 'How would you like to use the platform?'}
+          {session
+            ? 'Select your role to complete setup'
+            : selectedRole
+            ? `Registering as a ${selectedRole === 'cleaner' ? 'Cleaner' : 'Client'}`
+            : 'How would you like to use the platform?'}
         </Text>
       </View>
 
@@ -97,11 +111,46 @@ export default function RegisterRoleScreen() {
         <ActivityIndicator animating color={theme.colors.primary} style={{ marginBottom: spacing.md }} />
       )}
 
-      {!session && (
-        <View style={styles.googleSection}>
-          <Text style={styles.googleTitle} variant="labelLarge">
-            Quick Sign Up
-          </Text>
+      {selectedRole === null ? (
+        // Step 1: Choose Role
+        <View style={styles.cards}>
+          <Pressable onPress={() => handleSelectRole('client')} disabled={isLoading}>
+            <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
+              <Card.Content style={styles.cardContent}>
+                <Text style={styles.cardIcon}>🏠</Text>
+                <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]} variant="titleLarge">
+                  I need cleaning
+                </Text>
+                <Text style={styles.cardDesc} variant="bodyMedium">
+                  Book verified cleaners for your room, apartment, or laundry. Pay securely, chat in real-time.
+                </Text>
+                <View style={[styles.cardBadge, { backgroundColor: theme.colors.primaryContainer }]}>
+                  <Text style={[styles.badgeText, { color: theme.colors.primary }]}>Client Account</Text>
+                </View>
+              </Card.Content>
+            </Card>
+          </Pressable>
+
+          <Pressable onPress={() => handleSelectRole('cleaner')} disabled={isLoading}>
+            <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
+              <Card.Content style={styles.cardContent}>
+                <Text style={styles.cardIcon}>🧹</Text>
+                <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]} variant="titleLarge">
+                  I'm a cleaner
+                </Text>
+                <Text style={styles.cardDesc} variant="bodyMedium">
+                  Join as a verified cleaner, accept jobs, earn money, and build your reputation on campus.
+                </Text>
+                <View style={[styles.cardBadge, styles.cleanerBadge, { backgroundColor: theme.colors.secondaryContainer }]}>
+                  <Text style={[styles.badgeText, { color: theme.colors.secondary }]}>Cleaner Account</Text>
+                </View>
+              </Card.Content>
+            </Card>
+          </Pressable>
+        </View>
+      ) : (
+        // Step 2: Choose Auth Method for selected role
+        <View style={styles.authSection}>
           <Button
             mode="contained"
             onPress={handleGoogleSignInUnified}
@@ -113,50 +162,33 @@ export default function RegisterRoleScreen() {
           >
             Continue with Google
           </Button>
+
+          <View style={styles.divider}>
+            <Text style={styles.dividerText}>or</Text>
+          </View>
+
+          <Button
+            mode="outlined"
+            onPress={handleManualRegister}
+            style={styles.manualBtn}
+            contentStyle={styles.manualBtnContent}
+            textColor={theme.colors.onBackground}
+            disabled={isLoading}
+          >
+            Register Manually
+          </Button>
+
+          <Button
+            mode="text"
+            onPress={() => setSelectedRole(null)}
+            style={styles.backBtn}
+            textColor={theme.colors.primary}
+            disabled={isLoading}
+          >
+            Go Back / Choose Different Role
+          </Button>
         </View>
       )}
-
-      {!session && (
-        <View style={styles.divider}>
-          <Text style={styles.dividerText}>or choose your role manually</Text>
-        </View>
-      )}
-
-      <View style={styles.cards}>
-        <Pressable onPress={() => handleSelectRole('client')} disabled={isLoading}>
-          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
-            <Card.Content style={styles.cardContent}>
-              <Text style={styles.cardIcon}>🏠</Text>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]} variant="titleLarge">
-                I need cleaning
-              </Text>
-              <Text style={styles.cardDesc} variant="bodyMedium">
-                Book verified cleaners for your room, apartment, or laundry. Pay securely, chat in real-time.
-              </Text>
-              <View style={[styles.cardBadge, { backgroundColor: theme.colors.primaryContainer }]}>
-                <Text style={[styles.badgeText, { color: theme.colors.primary }]}>Client Account</Text>
-              </View>
-            </Card.Content>
-          </Card>
-        </Pressable>
-
-        <Pressable onPress={() => handleSelectRole('cleaner')} disabled={isLoading}>
-          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
-            <Card.Content style={styles.cardContent}>
-              <Text style={styles.cardIcon}>🧹</Text>
-              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]} variant="titleLarge">
-                I'm a cleaner
-              </Text>
-              <Text style={styles.cardDesc} variant="bodyMedium">
-                Join as a verified cleaner, accept jobs, earn money, and build your reputation on campus.
-              </Text>
-              <View style={[styles.cardBadge, styles.cleanerBadge, { backgroundColor: theme.colors.secondaryContainer }]}>
-                <Text style={[styles.badgeText, { color: theme.colors.secondary }]}>Cleaner Account</Text>
-              </View>
-            </Card.Content>
-          </Card>
-        </Pressable>
-      </View>
 
       <Text style={styles.footer} variant="bodySmall">
         Already have an account?{' '}
@@ -262,9 +294,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 12,
   },
+  authSection: {
+    gap: spacing.md,
+    justifyContent: 'center',
+    flex: 1,
+    marginTop: spacing.xl,
+  },
+  manualBtn: {
+    borderRadius: 12,
+    borderColor: colors.outline,
+  },
+  manualBtnContent: {
+    paddingVertical: 8,
+  },
+  backBtn: {
+    marginTop: spacing.sm,
+  },
   footer: {
     color: colors.onSurfaceVariant,
     textAlign: 'center',
+    marginTop: spacing.xl,
   },
   link: {
     color: colors.primary,

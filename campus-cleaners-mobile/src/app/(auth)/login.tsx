@@ -4,6 +4,7 @@ import { Text, TextInput, Button, SegmentedButtons, useTheme } from 'react-nativ
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
+import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { signInWithGoogle } from '@/lib/auth/google';
@@ -28,6 +29,7 @@ export default function LoginScreen() {
     setError('');
     setIsLoading(true);
     try {
+      await SecureStore.deleteItemAsync('registration_role').catch(() => {});
       const success = await signInWithGoogle();
       if (success) {
         await fetchProfile();

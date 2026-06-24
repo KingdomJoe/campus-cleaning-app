@@ -3,7 +3,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Stack } from 'expo-router';
 import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import { lightTheme, darkTheme } from '@/lib/theme';
 import { useAuthStore } from '@/stores/authStore';
@@ -18,35 +17,8 @@ export default function RootLayout() {
     initialize();
     initializeTheme();
 
-    const handleUrl = async (url: string) => {
-      if (url.includes('access_token=')) {
-        const hash = url.split('#')[1] || url.split('?')[1];
-        if (hash) {
-          const params = Object.fromEntries(
-            hash.split('&').map((pair) => pair.split('='))
-          );
-          if (params.access_token && params.refresh_token) {
-            await supabase.auth.setSession({
-              access_token: params.access_token,
-              refresh_token: params.refresh_token,
-            });
-            await useAuthStore.getState().fetchProfile();
-          }
-        }
-      }
-    };
-
-    const getInitialUrl = async () => {
-      const url = await Linking.getInitialURL();
-      if (url) handleUrl(url);
-    };
-
-    getInitialUrl();
-    const subscription = Linking.addEventListener('url', (event) => handleUrl(event.url));
-
     const cleanup = setupNotificationResponseHandler();
     return () => {
-      subscription.remove();
       cleanup();
     };
   }, [initialize]);

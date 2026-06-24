@@ -1,11 +1,13 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { Text, Button, Card, Avatar, Divider, Chip, Switch, useTheme } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import { Text, Button, Card, Avatar, Divider, Chip, Switch, useTheme, ProgressBar, TextInput } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import StarRating from '@/components/StarRating';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 import { useThemeStore } from '@/stores/themeStore';
+import { pickImage, uploadAvatar } from '@/lib/api/uploads';
+import { supabase } from '@/lib/supabase';
 
 const verificationStatusConfig = {
   pending: { label: 'Pending Verification', color: colors.warning, icon: '⏳' },
@@ -13,35 +15,190 @@ const verificationStatusConfig = {
   rejected: { label: 'Rejected', color: colors.error, icon: '❌' },
 };
 
+const SKILL_OPTIONS = [
+  'General cleaning',
+  'Deep cleaning',
+  'Laundry',
+];
+
 export default function CleanerProfileScreen() {
-  const { profile, cleanerProfile, signOut } = useAuthStore();
+  const { profile, cleanerProfile, signOut, fetchProfile } = useAuthStore();
   const { themeMode, toggleTheme } = useThemeStore();
   const theme = useTheme();
+
+  // Edit Mode States
+  const [isEditing, setIsEditing] = useState(false);
+  const [bio, setBio] = useState(cleanerProfile?.bio ?? '');
+  const [momo, setMomo] = useState(cleanerProfile?.mobile_money_number ?? '');
+  const [guarantorName, setGuarantorName] = useState(cleanerProfile?.guarantor_name ?? '');
+  const [guarantorPhone, setGuarantorPhone] = useState(cleanerProfile?.guarantor_phone ?? '');
+  const [skills, setSkills] = useState<string[]>(cleanerProfile?.skills ?? []);
+  
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  // Sync state with store profile updates
+  useEffect(() => {
+    if (cleanerProfile) {
+      setBio(cleanerProfile.bio ?? '');
+      setMomo(cleanerProfile.mobile_money_number ?? '');
+      setGuarantorName(cleanerProfile.guarantor_name ?? '');
+      setGuarantorPhone(cleanerProfile.guarantor_phone ?? '');
+      setSkills(cleanerProfile.skills ?? []);
+    }
+  }, [cleanerProfile]);
 
   const handleSignOut = async () => {
     await signOut();
     router.replace('/(auth)/welcome');
   };
 
+  // Completion Gauge Calculation
+  const hasPhoto = !!profile?.avatar_url;
+  const hasBio = !!cleanerProfile?.bio?.trim();
+  const hasMomo = !!cleanerProfile?.mobile_money_number?.trim();
+  const hasSkills = !!(cleanerProfile?.skills && cleanerProfile.skills.length > 0);
+  const hasGuarantor = !!(cleanerProfile?.guarantor_name?.trim() && cleanerProfile?.guarantor_phone?.trim());
+
+  let completionPct = 0;
+  if (hasPhoto) completionPct += 20;
+  if (hasBio) completionPct += 20;
+  if (hasMomo) completionPct += 20;
+  if (hasSkills) completionPct += 20;
+  if (hasGuarantor) completionPct += 20;
+
   const verificationStatus =
-    verificationStatusConfig[cleanerProfile?.verification_status ?? 'pending'];
+    completionPct < 100
+      ? { label: 'Incomplete Profile', color: colors.warning, icon: '⚠️' }
+      : verificationStatusConfig[cleanerProfile?.verification_status ?? 'pending'];
+
+  const handlePickAvatar = async () => {
+    if (!profile?.id) return;
+    try {
+      const uri = await pickImage({ aspect: [1, 1] });
+      if (!uri) return;
+
+      setIsUploadingPhoto(true);
+      const publicUrl = await uploadAvatar(profile.id, uri);
+      if (publicUrl) {
+        await fetchProfile();
+        Alert.alert('Success', 'Profile photo updated successfully!');
+      } else {
+        Alert.alert('Error', 'Could not upload photo. Please check network and try again.');
+      }
+    } catch (err) {
+      console.error('Photo picker error:', err);
+      Alert.alert('Error', 'Failed to update profile photo.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const toggleSkill = (skill: string) => {
+    setSkills((prev) =>
+      prev.includes(skill)
+        ? prev.filter((s) => s !== skill)
+        : [...prev, skill]
+    );
+  };
+
+  const handleSaveDetails = async () => {
+    if (!profile?.id) return;
+    setIsSaving(true);
+
+    try {
+      // Validate phone formatting if entered
+      let formattedGuarantorPhone = '';
+      if (guarantorPhone.trim()) {
+        const cleaned = guarantorPhone.replace(/[^\d+]/g, '');
+        formattedGuarantorPhone = cleaned.startsWith('+') ? cleaned : `+233${cleaned.replace(/^0/, '')}`;
+        const ghanaPhoneRegex = /^\+233\d{9}$/;
+        if (!ghanaPhoneRegex.test(formattedGuarantorPhone)) {
+          Alert.alert('Invalid Phone', 'Please enter a valid Ghana phone number for your guarantor.');
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      // Calculate mock completion percentage with local edits to decide if status goes to pending
+      const willHavePhoto = !!profile.avatar_url;
+      const willHaveBio = !!bio.trim();
+      const willHaveMomo = !!momo.trim();
+      const willHaveSkills = skills.length > 0;
+      const willHaveGuarantor = !!(guarantorName.trim() && formattedGuarantorPhone.trim());
+
+      let newPct = 0;
+      if (willHavePhoto) newPct += 20;
+      if (willHaveBio) newPct += 20;
+      if (willHaveMomo) newPct += 20;
+      if (willHaveSkills) newPct += 20;
+      if (willHaveGuarantor) newPct += 20;
+
+      // Auto-transition to pending review if 100% complete and not already approved
+      const autoPending = newPct === 100 && cleanerProfile?.verification_status !== 'approved';
+
+      const { error } = await supabase
+        .from('cleaner_profiles')
+        .update({
+          bio: bio.trim(),
+          mobile_money_number: momo.trim(),
+          guarantor_name: guarantorName.trim(),
+          guarantor_phone: formattedGuarantorPhone,
+          skills: skills,
+          ...(autoPending ? { verification_status: 'pending' } : {}),
+        })
+        .eq('user_id', profile.id);
+
+      if (error) throw error;
+
+      await fetchProfile();
+      setIsEditing(false);
+      Alert.alert('Success', 'Profile details updated successfully!');
+    } catch (err: any) {
+      console.error('Error saving profile details:', err);
+      Alert.alert('Error', err.message || 'Failed to save profile changes.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
-      {/* Header */}
+      
+      {/* Profile Photo & Basic Header */}
       <View style={styles.header}>
-        <Avatar.Text
-          size={80}
-          label={profile?.full_name?.charAt(0) ?? '?'}
-          style={styles.avatar}
-          color={colors.white}
-        />
+        <Pressable onPress={handlePickAvatar} disabled={isUploadingPhoto}>
+          <View style={styles.avatarWrapper}>
+            {profile?.avatar_url ? (
+              <Avatar.Image
+                size={96}
+                source={{ uri: profile.avatar_url }}
+                style={styles.avatar}
+              />
+            ) : (
+              <Avatar.Text
+                size={96}
+                label={profile?.full_name?.charAt(0) ?? '?'}
+                style={styles.avatar}
+                color={colors.white}
+              />
+            )}
+            <View style={[styles.cameraBadge, { backgroundColor: theme.colors.primary }]}>
+              <Text style={{ fontSize: 14 }}>📷</Text>
+            </View>
+          </View>
+        </Pressable>
+
+        {isUploadingPhoto && (
+          <Text style={{ color: theme.colors.primary, marginTop: 4, fontSize: 12 }}>Uploading photo...</Text>
+        )}
+
         <Text style={[styles.name, { color: theme.colors.onBackground }]} variant="headlineSmall">
           {profile?.full_name ?? 'Cleaner'}
         </Text>
         <Text style={styles.role} variant="bodyMedium">🧹 Cleaner</Text>
 
-        {/* Verification Badge */}
+        {/* Verification Status Badge */}
         <Chip
           icon={() => <Text>{verificationStatus.icon}</Text>}
           style={[styles.verificationChip, { borderColor: verificationStatus.color }]}
@@ -62,6 +219,25 @@ export default function CleanerProfileScreen() {
         )}
       </View>
 
+      {/* Completion Gauge Card */}
+      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
+        <Card.Content>
+          <View style={styles.gaugeHeader}>
+            <Text variant="titleMedium" style={{ fontWeight: '700', color: theme.colors.onSurface }}>Profile Completion</Text>
+            <Text variant="titleMedium" style={{ fontWeight: '700', color: theme.colors.primary }}>{completionPct}%</Text>
+          </View>
+          <ProgressBar progress={completionPct / 100} color={completionPct === 100 ? theme.colors.primary : theme.colors.secondary} style={styles.progressBar} />
+          
+          <View style={styles.checklist}>
+            <Text style={styles.checkItem} variant="bodySmall">{hasPhoto ? '✅' : '❌'} Profile Photo</Text>
+            <Text style={styles.checkItem} variant="bodySmall">{hasBio ? '✅' : '❌'} Short Bio</Text>
+            <Text style={styles.checkItem} variant="bodySmall">{hasMomo ? '✅' : '❌'} Mobile Money Number</Text>
+            <Text style={styles.checkItem} variant="bodySmall">{hasSkills ? '✅' : '❌'} Professional Skills</Text>
+            <Text style={styles.checkItem} variant="bodySmall">{hasGuarantor ? '✅' : '❌'} Guarantor Details</Text>
+          </View>
+        </Card.Content>
+      </Card>
+
       {/* Personal Info */}
       <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
         <Card.Content>
@@ -72,56 +248,167 @@ export default function CleanerProfileScreen() {
           <Pressable onPress={() => router.push('/(cleaner)/settings/location' as any)}>
             <InfoRow icon="📍" label="Location (Tap to change)" value={profile?.location ?? 'Not set'} />
           </Pressable>
-          {cleanerProfile?.current_lat && cleanerProfile?.current_lng && (
-            <InfoRow 
-              icon="🌐" 
-              label="GPS Coordinates" 
-              value={`${cleanerProfile.current_lat.toFixed(4)}, ${cleanerProfile.current_lng.toFixed(4)}`} 
-            />
-          )}
         </Card.Content>
       </Card>
 
-      {/* Cleaner Details */}
+      {/* Editable Work/Cleaner Details */}
       <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
         <Card.Content>
-          <Text style={[styles.sectionTitle, { color: theme.colors.primary }]} variant="labelLarge">Work Details</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.primary }]} variant="labelLarge">Work Details</Text>
+            {!isEditing && (
+              <Button mode="text" compact onPress={() => setIsEditing(true)} textColor={theme.colors.primary}>
+                Edit Details
+              </Button>
+            )}
+          </View>
           <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-          <InfoRow icon="💰" label="MoMo Number" value={cleanerProfile?.mobile_money_number ?? '—'} />
-          <InfoRow icon="👤" label="Guarantor" value={cleanerProfile?.guarantor_name ?? '—'} />
-          <InfoRow
-            icon="🟢"
-            label="Availability"
-            value={cleanerProfile?.availability ?? 'offline'}
-          />
 
-          {cleanerProfile?.bio && (
-            <>
-              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-              <Text style={styles.bioLabel} variant="labelSmall">Bio</Text>
-              <Text style={[styles.bioText, { color: theme.colors.onSurface }]} variant="bodyMedium">
-                {cleanerProfile.bio}
-              </Text>
-            </>
-          )}
+          {isEditing ? (
+            // Edit Mode Form
+            <View style={styles.editForm}>
+              <TextInput
+                label="Mobile Money Number"
+                value={momo}
+                onChangeText={setMomo}
+                keyboardType="phone-pad"
+                mode="outlined"
+                dense
+                placeholder="e.g. 024 123 4567"
+                outlineColor={theme.colors.outline}
+                activeOutlineColor={theme.colors.primary}
+                style={styles.textInput}
+              />
 
-          {cleanerProfile?.skills && cleanerProfile.skills.length > 0 && (
-            <>
-              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-              <Text style={styles.bioLabel} variant="labelSmall">Skills</Text>
-              <View style={styles.skillsRow}>
-                {cleanerProfile.skills.map((skill) => (
+              <TextInput
+                label="Short Bio"
+                value={bio}
+                onChangeText={setBio}
+                mode="outlined"
+                multiline
+                numberOfLines={3}
+                dense
+                placeholder="Tell clients about your experience and style..."
+                outlineColor={theme.colors.outline}
+                activeOutlineColor={theme.colors.primary}
+                style={styles.textInput}
+              />
+
+              <Text style={styles.fieldLabel} variant="labelSmall">Skills (Select category)</Text>
+              <View style={styles.chipEditRow}>
+                {SKILL_OPTIONS.map((skill) => (
                   <Chip
                     key={skill}
-                    style={styles.skillChip}
-                    textStyle={styles.skillText}
+                    selected={skills.includes(skill)}
+                    onPress={() => toggleSkill(skill)}
+                    style={[styles.skillChipEdit, skills.includes(skill) && { backgroundColor: theme.colors.primary }]}
+                    textStyle={{ color: skills.includes(skill) ? colors.white : theme.colors.onSurfaceVariant }}
+                    showSelectedCheck={false}
                     compact
                   >
                     {skill}
                   </Chip>
                 ))}
               </View>
-            </>
+
+              <Divider style={styles.formDivider} />
+              <Text style={styles.fieldLabel} variant="labelSmall">Guarantor Information</Text>
+
+              <TextInput
+                label="Guarantor Name"
+                value={guarantorName}
+                onChangeText={setGuarantorName}
+                mode="outlined"
+                dense
+                outlineColor={theme.colors.outline}
+                activeOutlineColor={theme.colors.primary}
+                style={styles.textInput}
+              />
+
+              <TextInput
+                label="Guarantor Phone"
+                value={guarantorPhone}
+                onChangeText={setGuarantorPhone}
+                keyboardType="phone-pad"
+                mode="outlined"
+                dense
+                placeholder="e.g. 024 123 4567"
+                outlineColor={theme.colors.outline}
+                activeOutlineColor={theme.colors.primary}
+                style={styles.textInput}
+              />
+
+              <View style={styles.editActionRow}>
+                <Button
+                  mode="outlined"
+                  onPress={() => {
+                    setIsEditing(false);
+                    // Reset fields to current profile values
+                    setBio(cleanerProfile?.bio ?? '');
+                    setMomo(cleanerProfile?.mobile_money_number ?? '');
+                    setGuarantorName(cleanerProfile?.guarantor_name ?? '');
+                    setGuarantorPhone(cleanerProfile?.guarantor_phone ?? '');
+                    setSkills(cleanerProfile?.skills ?? []);
+                  }}
+                  disabled={isSaving}
+                  textColor={theme.colors.outline}
+                  style={styles.actionBtn}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleSaveDetails}
+                  loading={isSaving}
+                  disabled={isSaving}
+                  buttonColor={theme.colors.primary}
+                  style={styles.actionBtn}
+                >
+                  Save
+                </Button>
+              </View>
+            </View>
+          ) : (
+            // View Mode Static Fields
+            <View>
+              <InfoRow icon="💰" label="MoMo Number" value={cleanerProfile?.mobile_money_number ?? '—'} />
+              <InfoRow icon="👤" label="Guarantor Name" value={cleanerProfile?.guarantor_name ?? '—'} />
+              <InfoRow icon="📞" label="Guarantor Phone" value={cleanerProfile?.guarantor_phone ?? '—'} />
+              <InfoRow
+                icon="🟢"
+                label="Availability"
+                value={cleanerProfile?.availability ?? 'offline'}
+              />
+
+              {cleanerProfile?.bio && (
+                <>
+                  <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+                  <Text style={styles.bioLabel} variant="labelSmall">Bio</Text>
+                  <Text style={[styles.bioText, { color: theme.colors.onSurface }]} variant="bodyMedium">
+                    {cleanerProfile.bio}
+                  </Text>
+                </>
+              )}
+
+              {cleanerProfile?.skills && cleanerProfile.skills.length > 0 && (
+                <>
+                  <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+                  <Text style={styles.bioLabel} variant="labelSmall">Skills</Text>
+                  <View style={styles.skillsRow}>
+                    {cleanerProfile.skills.map((skill) => (
+                      <Chip
+                        key={skill}
+                        style={styles.skillChip}
+                        textStyle={styles.skillText}
+                        compact
+                      >
+                        {skill}
+                      </Chip>
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
           )}
         </Card.Content>
       </Card>
@@ -162,12 +449,13 @@ export default function CleanerProfileScreen() {
 }
 
 function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  const theme = useTheme();
   return (
     <View style={infoStyles.row}>
       <Text style={infoStyles.icon}>{icon}</Text>
       <View>
-        <Text style={infoStyles.label} variant="labelSmall">{label}</Text>
-        <Text style={infoStyles.value} variant="bodyMedium">{value}</Text>
+        <Text style={[infoStyles.label, { color: theme.colors.onSurfaceVariant }]} variant="labelSmall">{label}</Text>
+        <Text style={[infoStyles.value, { color: theme.colors.onSurface }]} variant="bodyMedium">{value}</Text>
       </View>
     </View>
   );
@@ -176,21 +464,35 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 const infoStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   icon: { fontSize: 20, width: 28, textAlign: 'center' },
-  label: { color: colors.onSurfaceVariant },
-  value: { color: colors.onSurface, fontWeight: '500' },
+  label: { fontSize: 11 },
+  value: { fontWeight: '500' },
 });
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   header: { alignItems: 'center', paddingVertical: spacing.xl },
-  avatar: { backgroundColor: colors.primaryDark, marginBottom: spacing.md },
-  name: { color: colors.onBackground, fontWeight: '700' },
+  avatarWrapper: { position: 'relative' },
+  avatar: { backgroundColor: colors.primaryDark },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+  name: { color: colors.onBackground, fontWeight: '700', marginTop: spacing.md },
   role: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   verificationChip: { marginTop: spacing.md, backgroundColor: 'transparent' },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
   jobCount: { color: colors.onSurfaceVariant },
   card: { backgroundColor: colors.surfaceVariant, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.outline, marginBottom: spacing.lg },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { color: colors.primary, fontWeight: '600' },
   divider: { backgroundColor: colors.outline, marginVertical: spacing.sm },
   bioLabel: { color: colors.onSurfaceVariant, marginBottom: 4 },
@@ -199,4 +501,20 @@ const styles = StyleSheet.create({
   skillChip: { backgroundColor: colors.primaryContainer },
   skillText: { color: colors.primary, fontSize: 12 },
   logoutBtn: { borderColor: colors.error, borderRadius: 12, marginTop: spacing.md },
+  
+  // Completion Gauge
+  gaugeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  progressBar: { height: 8, borderRadius: 4, marginBottom: spacing.md },
+  checklist: { gap: spacing.xs, paddingLeft: spacing.xs },
+  checkItem: { color: colors.onSurfaceVariant },
+  
+  // Edit Mode Styles
+  editForm: { gap: spacing.md, marginTop: spacing.xs },
+  textInput: { backgroundColor: 'transparent' },
+  fieldLabel: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
+  chipEditRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
+  skillChipEdit: { backgroundColor: colors.surfaceVariant, borderWidth: 1, borderColor: colors.outline },
+  formDivider: { height: 1, backgroundColor: colors.outline, marginVertical: spacing.sm },
+  editActionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.md, marginTop: spacing.md },
+  actionBtn: { borderRadius: 8, minWidth: 90 },
 });

@@ -10,7 +10,7 @@ WebBrowser.maybeCompleteAuthSession();
  */
 export async function signInWithGoogle(): Promise<boolean> {
   try {
-    const redirectUrl = Linking.createURL('/(auth)/oauth-callback');
+    const redirectUrl = Linking.createURL('/auth/callback');
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

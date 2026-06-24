@@ -3,10 +3,12 @@ import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Image, Al
 import { Text, TextInput, Button, Chip, SegmentedButtons, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
+import * as SecureStore from 'expo-secure-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { pickImage } from '@/lib/api/uploads';
+import { signInWithGoogle } from '@/lib/auth/google';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 
@@ -16,46 +18,34 @@ const SKILL_OPTIONS = [
   'Laundry',
 ];
 
+import { useEffect } from 'react';
+
 export default function RegisterCleanerScreen() {
+  const theme = useTheme();
+  const { session, profile, fetchProfile } = useAuthStore();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isPasswordValid, setIsPasswordValid] = useState(false);
-  const [momoNumber, setMomoNumber] = useState('');
-  const [guarantorName, setGuarantorName] = useState('');
-  const [guarantorPhone, setGuarantorPhone] = useState('');
-  const [bio, setBio] = useState('');
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [verificationMethod, setVerificationMethod] = useState<'phone' | 'email'>('email');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const insets = useSafeAreaInsets();
-  const theme = useTheme();
 
-  const toggleSkill = (skill: string) => {
-    setSelectedSkills((prev) =>
-      prev.includes(skill)
-        ? prev.filter((s) => s !== skill)
-        : [...prev, skill]
-    );
-  };
-
-  const handlePickPhoto = async () => {
-    const uri = await pickImage({ aspect: [1, 1] });
-    if (uri) setProfilePhoto(uri);
-  };
+  // Prefill details if Google OAuth has established a session
+  useEffect(() => {
+    if (session && profile) {
+      if (profile.full_name) setFullName(profile.full_name);
+      if (profile.email) setEmail(profile.email);
+      if (profile.phone) setPhone(profile.phone);
+    }
+  }, [session, profile]);
 
   const handleRegister = async () => {
-    if (!fullName.trim() || !phone.trim() || !email.trim() || !momoNumber.trim()) {
+    if (!fullName.trim() || !phone.trim() || !email.trim()) {
       setError('Please fill in all required fields');
-      return;
-    }
-
-    if (selectedSkills.length === 0) {
-      setError('Please select at least one skill');
       return;
     }
 
@@ -64,8 +54,8 @@ export default function RegisterCleanerScreen() {
 
     try {
       // Clean phone input (remove spaces, parentheses, etc.)
-      const cleanedPhone = phone.replace(/[^\d+]/g, '');
-      const formattedPhone = cleanedPhone.startsWith('+') ? cleanedPhone : `+233${cleanedPhone.replace(/^0/, '')}`;
+      const cleaned = phone.replace(/[^\d+]/g, '');
+      const formattedPhone = cleaned.startsWith('+') ? cleaned : `+233${cleaned.replace(/^0/, '')}`;
 
       // Validate Ghana phone number format (checking +233 followed by exactly 9 digits)
       const ghanaPhoneRegex = /^\+233\d{9}$/;
@@ -75,104 +65,100 @@ export default function RegisterCleanerScreen() {
         return;
       }
 
-      // Clean guarantor phone input if set
-      const cleanedGuarantorPhone = guarantorPhone.replace(/[^\d+]/g, '');
-      const formattedGuarantorPhone = cleanedGuarantorPhone
-        ? (cleanedGuarantorPhone.startsWith('+') ? cleanedGuarantorPhone : `+233${cleanedGuarantorPhone.replace(/^0/, '')}`)
-        : '';
+      if (session) {
+        // Active Google OAuth session: just update the profiles database row directly
+        const user = useAuthStore.getState().user;
+        if (!user) throw new Error('No active user session');
 
-      // Save pending uploads to authStore so verify-otp can run them post-login
-      useAuthStore.getState().setPendingUploads({}, profilePhoto);
-
-      // Sign up with OTP
-      let signUpResult;
-      let usedMethod = verificationMethod;
-      if (verificationMethod === 'phone') {
-        try {
-          signUpResult = await supabase.auth.signInWithOtp({
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName.trim(),
             phone: formattedPhone,
-            options: {
-              shouldCreateUser: true,
-              data: {
-                full_name: fullName.trim(),
-                phone: formattedPhone,
-                email: email.trim(),
-                role: 'cleaner',
-                bio: bio.trim(),
-                skills: selectedSkills,
-                mobile_money_number: momoNumber.trim(),
-                guarantor_name: guarantorName.trim(),
-                guarantor_phone: formattedGuarantorPhone,
-              },
-            },
-          });
-          if (signUpResult.error) throw signUpResult.error;
-        } catch (phoneErr: any) {
-          console.warn('SMS OTP signup failed, falling back to Email OTP:', phoneErr.message);
-          usedMethod = 'email';
-          signUpResult = await supabase.auth.signInWithOtp({
-            email: email.trim(),
-            options: {
-              shouldCreateUser: true,
-              data: {
-                full_name: fullName.trim(),
-                phone: formattedPhone,
-                email: email.trim(),
-                role: 'cleaner',
-                bio: bio.trim(),
-                skills: selectedSkills,
-                mobile_money_number: momoNumber.trim(),
-                guarantor_name: guarantorName.trim(),
-                guarantor_phone: formattedGuarantorPhone,
-              },
-            },
-          });
-          if (signUpResult.error) throw signUpResult.error;
+          })
+          .eq('id', user.id);
 
-          Alert.alert(
-            'SMS Verification Unavailable',
-            'Your carrier is unsupported for SMS OTP. We have sent a verification code to your Email instead.'
-          );
-        }
+        if (updateError) throw updateError;
+
+        await fetchProfile();
+        router.replace('/(cleaner)/jobs');
       } else {
-        if (!password) {
-          setError('Please enter a password');
-          setIsLoading(false);
-          return;
-        }
-        if (!isPasswordValid) {
-          setError('Please make sure your password satisfies all safety criteria');
-          setIsLoading(false);
-          return;
-        }
-        signUpResult = await supabase.auth.signUp({
-          email: email.trim(),
-          password: password,
-          options: {
-            emailRedirectTo: Linking.createURL('auth/callback'),
-            data: {
-              full_name: fullName.trim(),
+        // Normal signup with OTP
+        let signUpResult;
+        let usedMethod = verificationMethod;
+        if (verificationMethod === 'phone') {
+          try {
+            signUpResult = await supabase.auth.signInWithOtp({
               phone: formattedPhone,
+              options: {
+                shouldCreateUser: true,
+                data: {
+                  full_name: fullName.trim(),
+                  phone: formattedPhone,
+                  email: email.trim(),
+                  role: 'cleaner',
+                },
+              },
+            });
+            if (signUpResult.error) throw signUpResult.error;
+          } catch (phoneErr: any) {
+            console.warn('SMS OTP signup failed, falling back to Email OTP:', phoneErr.message);
+            usedMethod = 'email';
+            signUpResult = await supabase.auth.signInWithOtp({
               email: email.trim(),
-              role: 'cleaner',
-              bio: bio.trim(),
-              skills: selectedSkills,
-              mobile_money_number: momoNumber.trim(),
-              guarantor_name: guarantorName.trim(),
-              guarantor_phone: formattedGuarantorPhone,
+              options: {
+                shouldCreateUser: true,
+                data: {
+                  full_name: fullName.trim(),
+                  phone: formattedPhone,
+                  email: email.trim(),
+                  role: 'cleaner',
+                },
+              },
+            });
+            if (signUpResult.error) throw signUpResult.error;
+
+            Alert.alert(
+              'SMS Verification Unavailable',
+              'Your carrier is unsupported for SMS OTP. We have sent a verification code to your Email instead.'
+            );
+          }
+        } else {
+          if (!password) {
+            setError('Please enter a password');
+            setIsLoading(false);
+            return;
+          }
+          if (!isPasswordValid) {
+            setError('Please make sure your password satisfies all safety criteria');
+            setIsLoading(false);
+            return;
+          }
+          signUpResult = await supabase.auth.signUp({
+            email: email.trim(),
+            password: password,
+            options: {
+              emailRedirectTo: Linking.createURL('auth/callback'),
+              data: {
+                full_name: fullName.trim(),
+                phone: formattedPhone,
+                email: email.trim(),
+                role: 'cleaner',
+              },
             },
+          });
+          if (signUpResult.error) throw signUpResult.error;
+        }
+
+        // Navigate to OTP verification
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: {
+            method: usedMethod,
+            identifier: usedMethod === 'phone' ? formattedPhone : email.trim(),
           },
         });
-        if (signUpResult.error) throw signUpResult.error;
       }
-
-      router.push({
-        pathname: '/(auth)/verify-otp',
-        params: {
-          method: usedMethod,
-          identifier: usedMethod === 'phone' ? formattedPhone : email.trim(),
-        },
-      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed';
       setError(message);
@@ -186,20 +172,15 @@ export default function RegisterCleanerScreen() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: Linking.createURL('auth/callback'),
-          queryParams: {
-            role: 'cleaner',
-          },
-        },
-      });
-
-      if (error) throw error;
+      await SecureStore.setItemAsync('registration_role', 'cleaner');
+      const success = await signInWithGoogle();
+      if (success) {
+        await fetchProfile();
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Google sign-in failed';
       setError(message);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -219,54 +200,38 @@ export default function RegisterCleanerScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.divider}>
-          <Text style={styles.dividerText}>or continue with</Text>
-        </View>
+        {!session && (
+          <>
+            <View style={styles.divider}>
+              <Text style={styles.dividerText}>or continue with</Text>
+            </View>
 
-        <Button
-          mode="outlined"
-          onPress={handleGoogleSignIn}
-          loading={isLoading}
-          disabled={isLoading}
-          icon="google"
-          style={styles.googleBtn}
-          contentStyle={styles.googleBtnContent}
-        >
-          Continue with Google
-        </Button>
+            <Button
+              mode="outlined"
+              onPress={handleGoogleSignIn}
+              loading={isLoading}
+              disabled={isLoading}
+              icon="google"
+              style={styles.googleBtn}
+              contentStyle={styles.googleBtnContent}
+            >
+              Continue with Google
+            </Button>
 
-        <View style={styles.divider}>
-          <Text style={styles.dividerText}>or register with email/phone</Text>
-        </View>
+            <View style={styles.divider}>
+              <Text style={styles.dividerText}>or register with details</Text>
+            </View>
+          </>
+        )}
 
         <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
-          Register as Cleaner
+          {session ? 'Complete Your Profile' : 'Register as Cleaner'}
         </Text>
         <Text style={styles.subtitle} variant="bodyMedium">
-          Join our team and start earning
+          {session ? 'Provide your phone number to complete setup' : 'Join our team and start earning'}
         </Text>
 
-        {/* Profile Photo */}
-        <View style={styles.photoSection}>
-          <Button
-            mode="outlined"
-            onPress={handlePickPhoto}
-            icon="camera"
-            textColor={colors.primary}
-            style={styles.photoBtn}
-          >
-            {profilePhoto ? 'Change Photo' : 'Add Profile Photo'}
-          </Button>
-          {profilePhoto && (
-            <Image source={{ uri: profilePhoto }} style={styles.photoPreview} />
-          )}
-        </View>
-
         <View style={styles.form}>
-          <Text style={styles.sectionLabel} variant="labelLarge">
-            Personal Information
-          </Text>
-
           <TextInput
             label="Full Name *"
             value={fullName}
@@ -278,6 +243,7 @@ export default function RegisterCleanerScreen() {
             activeOutlineColor={colors.primary}
             textColor={colors.onSurface}
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+            disabled={!!session}
           />
 
           <TextInput
@@ -308,9 +274,10 @@ export default function RegisterCleanerScreen() {
             activeOutlineColor={colors.primary}
             textColor={colors.onSurface}
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+            disabled={!!session}
           />
 
-          {verificationMethod === 'email' && (
+          {!session && verificationMethod === 'email' && (
             <View style={{ marginBottom: spacing.md }}>
               <TextInput
                 label="Password *"
@@ -340,107 +307,23 @@ export default function RegisterCleanerScreen() {
             </View>
           )}
 
-          <Text style={styles.sectionLabel} variant="labelMedium">
-            Verification Method *
-          </Text>
-          <SegmentedButtons
-            value={verificationMethod}
-            onValueChange={(v) => setVerificationMethod(v as 'phone' | 'email')}
-            buttons={[
-              { value: 'email', label: '📧 Email & Pass' },
-              { value: 'phone', label: '📱 SMS OTP' },
-            ]}
-            style={styles.segment}
-            theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
-          />
-
-          <TextInput
-            label="Mobile Money Number *"
-            value={momoNumber}
-            onChangeText={setMomoNumber}
-            keyboardType="phone-pad"
-            mode="outlined"
-            left={<TextInput.Icon icon="cash" />}
-            style={styles.input}
-            outlineColor={colors.outline}
-            activeOutlineColor={colors.primary}
-            textColor={colors.onSurface}
-            theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-            placeholder="024 123 4567"
-          />
-
-          <TextInput
-            label="Short Bio"
-            value={bio}
-            onChangeText={setBio}
-            mode="outlined"
-            multiline
-            numberOfLines={3}
-            placeholder="Tell clients about yourself..."
-            style={styles.input}
-            outlineColor={colors.outline}
-            activeOutlineColor={colors.primary}
-            textColor={colors.onSurface}
-            theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-          />
-
-          <Text style={styles.sectionLabel} variant="labelLarge">
-            Skills (Select at least one)
-          </Text>
-
-          <View style={styles.chipContainer}>
-            {SKILL_OPTIONS.map((skill) => (
-              <Chip
-                key={skill}
-                selected={selectedSkills.includes(skill)}
-                onPress={() => toggleSkill(skill)}
-                style={[
-                  styles.chip,
-                  selectedSkills.includes(skill) && styles.chipSelected,
+          {!session && (
+            <>
+              <Text style={styles.sectionLabel} variant="labelMedium">
+                Verification Method *
+              </Text>
+              <SegmentedButtons
+                value={verificationMethod}
+                onValueChange={(v) => setVerificationMethod(v as 'phone' | 'email')}
+                buttons={[
+                  { value: 'email', label: '📧 Email & Pass' },
+                  { value: 'phone', label: '📱 SMS OTP' },
                 ]}
-                textStyle={{
-                  color: selectedSkills.includes(skill)
-                    ? colors.onPrimary
-                    : colors.onSurfaceVariant,
-                }}
-                showSelectedCheck={false}
-              >
-                {skill}
-              </Chip>
-            ))}
-          </View>
-
-          <Text style={styles.sectionLabel} variant="labelLarge">
-            Guarantor Information
-          </Text>
-
-          <TextInput
-            label="Guarantor Name"
-            value={guarantorName}
-            onChangeText={setGuarantorName}
-            mode="outlined"
-            left={<TextInput.Icon icon="account-check" />}
-            style={styles.input}
-            outlineColor={colors.outline}
-            activeOutlineColor={colors.primary}
-            textColor={colors.onSurface}
-            theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-          />
-
-          <TextInput
-            label="Guarantor Phone"
-            value={guarantorPhone}
-            onChangeText={setGuarantorPhone}
-            keyboardType="phone-pad"
-            mode="outlined"
-            left={<TextInput.Icon icon="phone" />}
-            style={styles.input}
-            outlineColor={colors.outline}
-            activeOutlineColor={colors.primary}
-            textColor={colors.onSurface}
-            theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-            placeholder="024 123 4567"
-          />
+                style={styles.segment}
+                theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
+              />
+            </>
+          )}
         </View>
 
         {error ? (
@@ -459,7 +342,7 @@ export default function RegisterCleanerScreen() {
           labelStyle={styles.btnLabel}
           buttonColor={colors.primary}
         >
-          Register & Verify
+          {session ? 'Complete Setup' : 'Register & Verify'}
         </Button>
 
         <Text style={styles.note} variant="bodySmall">
@@ -516,23 +399,6 @@ const styles = StyleSheet.create({
   googleBtnContent: {
     paddingVertical: 10,
   },
-  photoSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  photoBtn: {
-    borderColor: colors.primary,
-    borderRadius: 12,
-  },
-  photoPreview: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
   form: {
     gap: spacing.md,
     marginBottom: spacing.lg,
@@ -544,45 +410,6 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.surfaceVariant,
-  },
-  chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    backgroundColor: colors.surfaceVariant,
-    borderColor: colors.outline,
-    borderWidth: 1,
-  },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  docRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  docInfo: {
-    flex: 1,
-  },
-  docLabel: {
-    color: colors.white,
-  },
-  docHint: {
-    color: colors.onSurfaceVariant,
-    fontSize: 11,
-  },
-  docBtn: {
-    borderRadius: 8,
-    minWidth: 100,
-  },
-  docBtnContent: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
   },
   error: {
     color: colors.error,

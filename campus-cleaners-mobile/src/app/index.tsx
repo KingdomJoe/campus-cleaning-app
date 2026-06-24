@@ -18,9 +18,19 @@ export default function IndexScreen() {
       return;
     }
 
-    // If role is not selected, or profile phone is missing (incomplete onboarding), redirect to role selection
-    if (!role || !profile?.phone) {
+    // If role is not selected, redirect to role selection
+    if (!role) {
       router.replace('/(auth)/register');
+      return;
+    }
+
+    // If profile phone is missing, redirect directly to role-specific form to complete onboarding
+    if (!profile?.phone) {
+      if (role === 'cleaner') {
+        router.replace('/(auth)/register-cleaner');
+      } else {
+        router.replace('/(auth)/register-client');
+      }
       return;
     }
 

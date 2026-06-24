@@ -67,6 +67,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!user) return;
 
     try {
+      set({ isLoading: true });
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -75,6 +76,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (error) {
         console.error('Error fetching profile:', error.message);
+        set({ isLoading: false });
         return;
       }
 
@@ -95,6 +97,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     } catch (err) {
       console.error('Error in fetchProfile:', err);
+    } finally {
+      set({ isLoading: false });
     }
   },
 
@@ -121,13 +125,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           user: session.user,
         });
         await get().fetchProfile();
+      } else {
+        set({ isLoading: false });
       }
 
       // Listen for auth state changes
       supabase.auth.onAuthStateChange(async (_event, session) => {
+        const currentSession = get().session;
+        const isLoggingIn = session?.user && (!currentSession || currentSession.user.id !== session.user.id);
+
         set({
           session,
           user: session?.user ?? null,
+          ...(isLoggingIn ? { isLoading: true } : {}),
         });
 
         if (session?.user) {
@@ -137,15 +147,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             profile: null,
             cleanerProfile: null,
             role: null,
+            isLoading: false,
           });
         }
       });
     } catch (err) {
       console.error('Error initializing auth:', err);
+      set({ isLoading: false });
     } finally {
-      set({ isLoading: true, isInitialized: true });
-      // Small delay to allow profile fetch to complete
-      setTimeout(() => set({ isLoading: false }), 100);
+      set({ isInitialized: true });
     }
   },
 }));

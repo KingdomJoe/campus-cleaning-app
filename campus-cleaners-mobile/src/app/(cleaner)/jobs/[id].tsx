@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Text, Button, Card, Divider } from 'react-native-paper';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -53,6 +53,14 @@ export default function JobDetailScreen() {
     if (!booking || !profile) return;
     const transition = STATUS_TRANSITIONS[booking.status];
     if (!transition) return;
+
+    // Security check: only verified cleaners can accept/update jobs
+    const cleanerProfile = useAuthStore.getState().cleanerProfile;
+    const isApproved = cleanerProfile?.verification_status === 'approved';
+    if (!isApproved) {
+      Alert.alert('Not Verified', 'Your cleaner profile must be verified by an admin before accepting or updating jobs.');
+      return;
+    }
 
     setUpdating(true);
 
