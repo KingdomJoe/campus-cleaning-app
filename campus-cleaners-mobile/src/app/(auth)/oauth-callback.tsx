@@ -79,7 +79,7 @@ export default function OAuthCallbackScreen() {
     }
 
     handleSession();
-  }, [params]);
+  }, [params, fetchProfile, url]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
