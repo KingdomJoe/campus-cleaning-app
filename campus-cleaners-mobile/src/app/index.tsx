@@ -4,6 +4,7 @@ import { ActivityIndicator, Text } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/lib/theme';
+import Logo from '@/components/Logo';
 
 export default function IndexScreen() {
   const { isLoading, isInitialized, session, role, profile } = useAuthStore();
@@ -31,14 +32,9 @@ export default function IndexScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.brand} variant="headlineLarge">
-        🧹
-      </Text>
+      <Logo size={96} style={styles.logo} />
       <Text style={styles.title} variant="headlineMedium">
-        Campus Cleaners
-      </Text>
-      <Text style={styles.subtitle} variant="bodyMedium">
-        Ghana
+        Uber for Cleaning
       </Text>
       <ActivityIndicator
         animating
@@ -57,9 +53,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.background,
   },
-  brand: {
-    fontSize: 64,
-    marginBottom: 16,
+  logo: {
+    marginBottom: 24,
   },
   title: {
     color: colors.white,

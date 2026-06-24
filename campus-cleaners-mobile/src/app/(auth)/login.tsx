@@ -14,6 +14,9 @@ export default function LoginScreen() {
   const [method, setMethod] = useState<LoginMethod>('phone');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [emailLoginMethod, setEmailLoginMethod] = useState<'password' | 'otp'>('password');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
@@ -35,7 +38,7 @@ export default function LoginScreen() {
     }
   };
 
-  const handleSendOTP = async () => {
+  const handleSignInAction = async () => {
     setError('');
     setIsLoading(true);
 
@@ -64,17 +67,46 @@ export default function LoginScreen() {
           setIsLoading(false);
           return;
         }
-        const { error: otpError } = await supabase.auth.signInWithOtp({
-          email: email.trim(),
-        });
-        if (otpError) throw otpError;
-        router.push({
-          pathname: '/(auth)/verify-otp',
-          params: { method: 'email', identifier: email.trim() },
-        });
+
+        if (emailLoginMethod === 'password') {
+          if (!password) {
+            setError('Please enter your password');
+            setIsLoading(false);
+            return;
+          }
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password: password,
+          });
+          if (signInError) throw signInError;
+
+          // Successful password login, fetch profile and redirect
+          await fetchProfile();
+          const role = useAuthStore.getState().role;
+          if (!role) {
+            router.replace('/(auth)/register');
+          } else if (role === 'cleaner') {
+            router.replace('/(cleaner)/jobs');
+          } else {
+            router.replace('/(client)/home');
+          }
+        } else {
+          // Magic link (email OTP)
+          const { error: otpError } = await supabase.auth.signInWithOtp({
+            email: email.trim(),
+            options: {
+              emailRedirectTo: 'uberforcleaning://auth/callback',
+            }
+          });
+          if (otpError) throw otpError;
+          router.push({
+            pathname: '/(auth)/verify-otp',
+            params: { method: 'email', identifier: email.trim() },
+          });
+        }
       }
     } catch (err: unknown) {
-      let message = err instanceof Error ? err.message : 'Failed to send OTP';
+      let message = err instanceof Error ? err.message : 'Authentication failed';
       if (
         message.toLowerCase().includes('unsupported phone provider') ||
         message.toLowerCase().includes('carrier') ||
@@ -139,21 +171,56 @@ export default function LoginScreen() {
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
           />
         ) : (
-          <TextInput
-            label="Email address"
-            placeholder="you@student.edu"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            mode="outlined"
-            left={<TextInput.Icon icon="email-outline" />}
-            style={styles.input}
-            outlineColor={colors.outline}
-            activeOutlineColor={colors.primary}
-            textColor={colors.onSurface}
-            theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-          />
+          <View style={{ gap: spacing.md }}>
+            <TextInput
+              label="Email address"
+              placeholder="you@student.edu"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              mode="outlined"
+              left={<TextInput.Icon icon="email-outline" />}
+              style={styles.input}
+              outlineColor={colors.outline}
+              activeOutlineColor={colors.primary}
+              textColor={colors.onSurface}
+              theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+            />
+
+            <SegmentedButtons
+              value={emailLoginMethod}
+              onValueChange={(v) => setEmailLoginMethod(v as 'password' | 'otp')}
+              buttons={[
+                { value: 'password', label: '🔒 Password' },
+                { value: 'otp', label: '✉️ Magic Link' },
+              ]}
+              style={styles.emailMethodSegment}
+              theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
+            />
+
+            {emailLoginMethod === 'password' && (
+              <TextInput
+                label="Password"
+                value={password}
+                onChangeText={password => setPassword(password)}
+                secureTextEntry={!showPassword}
+                mode="outlined"
+                left={<TextInput.Icon icon="lock-outline" />}
+                right={
+                  <TextInput.Icon
+                    icon={showPassword ? 'eye-off' : 'eye'}
+                    onPress={() => setShowPassword(!showPassword)}
+                  />
+                }
+                style={styles.input}
+                outlineColor={colors.outline}
+                activeOutlineColor={colors.primary}
+                textColor={colors.onSurface}
+                theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+              />
+            )}
+          </View>
         )}
 
         {error ? (
@@ -164,7 +231,7 @@ export default function LoginScreen() {
 
         <Button
           mode="contained"
-          onPress={handleSendOTP}
+          onPress={handleSignInAction}
           loading={isLoading}
           disabled={isLoading}
           style={styles.btn}
@@ -172,7 +239,11 @@ export default function LoginScreen() {
           labelStyle={styles.btnLabel}
           buttonColor={colors.primary}
         >
-          Send OTP Code
+          {method === 'phone'
+            ? 'Send OTP Code'
+            : emailLoginMethod === 'password'
+            ? 'Sign In'
+            : 'Send Magic Link'}
         </Button>
 
         <View style={styles.divider}>
@@ -232,7 +303,11 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.surfaceVariant,
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  emailMethodSegment: {
+    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
   },
   error: {
     color: colors.error,

@@ -85,7 +85,7 @@ export default function RegisterRoleScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title} variant="headlineMedium">
-          {session ? 'Complete Your Account' : 'Join Campus Cleaners'}
+          {session ? 'Complete Your Account' : 'Join Uber for Cleaning'}
         </Text>
         <Text style={styles.subtitle} variant="bodyLarge">
           {session ? 'Select your role to complete setup' : 'How would you like to use the platform?'}

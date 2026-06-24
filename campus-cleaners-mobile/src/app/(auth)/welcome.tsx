@@ -4,6 +4,7 @@ import { Text, Button } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '@/lib/theme';
+import Logo from '@/components/Logo';
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
@@ -21,12 +22,9 @@ export default function WelcomeScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.hero}>
-        <Text style={styles.emoji}>🧹</Text>
+        <Logo size={96} style={styles.logo} />
         <Text style={styles.title} variant="headlineLarge">
-          Campus Cleaners
-        </Text>
-        <Text style={styles.tagline} variant="titleMedium">
-          Ghana
+          Uber for Cleaning
         </Text>
         <Text style={styles.description} variant="bodyLarge">
           Book trusted cleaners and laundry services right from your phone. Fast, affordable, and reliable.
@@ -88,21 +86,13 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: 'center',
   },
-  emoji: {
-    fontSize: 72,
+  logo: {
     marginBottom: spacing.md,
   },
   title: {
     color: colors.white,
     fontWeight: '800',
     textAlign: 'center',
-  },
-  tagline: {
-    color: colors.primary,
-    fontWeight: '600',
-    letterSpacing: 6,
-    textTransform: 'uppercase',
-    marginTop: 4,
   },
   description: {
     color: colors.onSurfaceVariant,

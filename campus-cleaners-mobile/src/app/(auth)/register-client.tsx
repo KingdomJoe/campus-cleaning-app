@@ -6,11 +6,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { colors, spacing } from '@/lib/theme';
+import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 
 export default function RegisterClientScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isPasswordValid, setIsPasswordValid] = useState(false);
   const [verificationMethod, setVerificationMethod] = useState<'phone' | 'email'>('email');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -79,10 +83,21 @@ export default function RegisterClientScreen() {
           );
         }
       } else {
-        signUpResult = await supabase.auth.signInWithOtp({
+        if (!password) {
+          setError('Please enter a password');
+          setIsLoading(false);
+          return;
+        }
+        if (!isPasswordValid) {
+          setError('Please make sure your password satisfies all safety criteria');
+          setIsLoading(false);
+          return;
+        }
+        signUpResult = await supabase.auth.signUp({
           email: email.trim(),
+          password: password,
           options: {
-            shouldCreateUser: true,
+            emailRedirectTo: 'uberforcleaning://auth/callback',
             data: {
               full_name: fullName.trim(),
               phone: formattedPhone,
@@ -118,7 +133,7 @@ export default function RegisterClientScreen() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'campuscleaners://auth/callback',
+          redirectTo: 'uberforcleaning://auth/callback',
           queryParams: {
             role: 'client',
           },
@@ -219,6 +234,36 @@ export default function RegisterClientScreen() {
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
           />
 
+          {verificationMethod === 'email' && (
+            <View style={{ marginBottom: spacing.md }}>
+              <TextInput
+                label="Password *"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                mode="outlined"
+                left={<TextInput.Icon icon="lock-outline" />}
+                right={
+                  <TextInput.Icon
+                    icon={showPassword ? 'eye-off' : 'eye'}
+                    onPress={() => setShowPassword(!showPassword)}
+                  />
+                }
+                style={styles.input}
+                outlineColor={colors.outline}
+                activeOutlineColor={colors.primary}
+                textColor={colors.onSurface}
+                theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+              />
+              <PasswordStrengthIndicator
+                password={password}
+                email={email}
+                fullName={fullName}
+                onStrengthChange={setIsPasswordValid}
+              />
+            </View>
+          )}
+
           <Text style={styles.sectionLabel} variant="labelMedium">
             Verification Method *
           </Text>
@@ -226,7 +271,7 @@ export default function RegisterClientScreen() {
             value={verificationMethod}
             onValueChange={(v) => setVerificationMethod(v as 'phone' | 'email')}
             buttons={[
-              { value: 'email', label: '📧 Email OTP' },
+              { value: 'email', label: '📧 Email & Pass' },
               { value: 'phone', label: '📱 SMS OTP' },
             ]}
             style={styles.segment}

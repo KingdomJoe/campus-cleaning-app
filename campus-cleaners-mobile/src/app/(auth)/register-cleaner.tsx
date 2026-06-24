@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { pickImage } from '@/lib/api/uploads';
 import { colors, spacing, borderRadius } from '@/lib/theme';
+import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 
 const SKILL_OPTIONS = [
   'General cleaning',
@@ -25,6 +26,9 @@ export default function RegisterCleanerScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isPasswordValid, setIsPasswordValid] = useState(false);
   const [momoNumber, setMomoNumber] = useState('');
   const [guarantorName, setGuarantorName] = useState('');
   const [guarantorPhone, setGuarantorPhone] = useState('');
@@ -153,10 +157,21 @@ export default function RegisterCleanerScreen() {
           );
         }
       } else {
-        signUpResult = await supabase.auth.signInWithOtp({
+        if (!password) {
+          setError('Please enter a password');
+          setIsLoading(false);
+          return;
+        }
+        if (!isPasswordValid) {
+          setError('Please make sure your password satisfies all safety criteria');
+          setIsLoading(false);
+          return;
+        }
+        signUpResult = await supabase.auth.signUp({
           email: email.trim(),
+          password: password,
           options: {
-            shouldCreateUser: true,
+            emailRedirectTo: 'uberforcleaning://auth/callback',
             data: {
               full_name: fullName.trim(),
               phone: formattedPhone,
@@ -196,7 +211,7 @@ export default function RegisterCleanerScreen() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'campuscleaners://auth/callback',
+          redirectTo: 'uberforcleaning://auth/callback',
           queryParams: {
             role: 'cleaner',
           },
@@ -317,6 +332,36 @@ export default function RegisterCleanerScreen() {
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
           />
 
+          {verificationMethod === 'email' && (
+            <View style={{ marginBottom: spacing.md }}>
+              <TextInput
+                label="Password *"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                mode="outlined"
+                left={<TextInput.Icon icon="lock-outline" />}
+                right={
+                  <TextInput.Icon
+                    icon={showPassword ? 'eye-off' : 'eye'}
+                    onPress={() => setShowPassword(!showPassword)}
+                  />
+                }
+                style={styles.input}
+                outlineColor={colors.outline}
+                activeOutlineColor={colors.primary}
+                textColor={colors.onSurface}
+                theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+              />
+              <PasswordStrengthIndicator
+                password={password}
+                email={email}
+                fullName={fullName}
+                onStrengthChange={setIsPasswordValid}
+              />
+            </View>
+          )}
+
           <Text style={styles.sectionLabel} variant="labelMedium">
             Verification Method *
           </Text>
@@ -324,7 +369,7 @@ export default function RegisterCleanerScreen() {
             value={verificationMethod}
             onValueChange={(v) => setVerificationMethod(v as 'phone' | 'email')}
             buttons={[
-              { value: 'email', label: '📧 Email OTP' },
+              { value: 'email', label: '📧 Email & Pass' },
               { value: 'phone', label: '📱 SMS OTP' },
             ]}
             style={styles.segment}

@@ -1,21 +1,21 @@
 {
   "expo": {
-    "name": "Campus Cleaners Ghana",
-    "slug": "campus-cleaners-ghana",
+    "name": "Uber for Cleaning",
+    "slug": "uber-for-cleaning",
     "version": "1.1.0",
     "cli": {
       "appVersionSource": "remote"
     },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "campuscleaners",
+    "scheme": "uberforcleaning",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.campuscleaners.ghana"
+      "bundleIdentifier": "com.uberforcleaning.app"
     },
     "android": {
-      "package": "com.campuscleaners.ghana",
+      "package": "com.uberforcleaning.app",
       "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0F",
@@ -58,14 +58,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Campus Cleaners needs access to your photos for booking verification.",
-          "cameraPermission": "Campus Cleaners needs access to your camera for before/after photos."
+          "photosPermission": "Uber for Cleaning needs access to your photos for booking verification.",
+          "cameraPermission": "Uber for Cleaning needs access to your camera for before/after photos."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Campus Cleaners needs your location to find nearby cleaners."
+          "locationWhenInUsePermission": "Uber for Cleaning needs your location to find nearby cleaners."
         }
       ]
     ],
