@@ -4,7 +4,7 @@ import { Text, Card, Button, ActivityIndicator } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { signInWithGoogle } from '@/lib/auth/google';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 
@@ -16,11 +16,6 @@ export default function RegisterRoleScreen() {
   const handleGoogleSignInUnified = async () => {
     setIsLoading(true);
     try {
-      if (BYPASS_AUTH) {
-        await useAuthStore.getState().mockGoogleLogin();
-        setIsLoading(false);
-        return;
-      }
       const success = await signInWithGoogle();
       if (success) {
         await fetchProfile();
@@ -34,16 +29,6 @@ export default function RegisterRoleScreen() {
   };
 
   const handleSelectRole = async (role: 'client' | 'cleaner') => {
-    if (BYPASS_AUTH) {
-      useAuthStore.getState().setMockTempRole(role);
-      if (role === 'cleaner') {
-        router.push('/(auth)/register-cleaner');
-      } else {
-        router.push('/(auth)/register-client');
-      }
-      return;
-    }
-
     const user = useAuthStore.getState().user;
     if (user) {
       setIsLoading(true);

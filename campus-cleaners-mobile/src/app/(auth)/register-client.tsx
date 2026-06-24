@@ -4,7 +4,7 @@ import { Text, TextInput, Button, SegmentedButtons } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { colors, spacing } from '@/lib/theme';
 
 export default function RegisterClientScreen() {
@@ -34,25 +34,6 @@ export default function RegisterClientScreen() {
       const ghanaPhoneRegex = /^\+233\d{9}$/;
       if (!ghanaPhoneRegex.test(formattedPhone)) {
         setError('Please enter a valid Ghana mobile number (e.g., 024 123 4567 or 055 123 4567)');
-        setIsLoading(false);
-        return;
-      }
-
-      if (BYPASS_AUTH) {
-        useAuthStore.getState().setMockTempData({
-          identifier: email.trim(),
-          method: 'email',
-          fullName: fullName.trim(),
-          phone: formattedPhone,
-        });
-
-        router.push({
-          pathname: '/(auth)/verify-otp',
-          params: {
-            method: 'email',
-            identifier: email.trim(),
-          },
-        });
         setIsLoading(false);
         return;
       }
@@ -134,11 +115,6 @@ export default function RegisterClientScreen() {
     setIsLoading(true);
 
     try {
-      if (BYPASS_AUTH) {
-        await useAuthStore.getState().mockGoogleLogin();
-        setIsLoading(false);
-        return;
-      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

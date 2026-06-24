@@ -4,7 +4,7 @@ import { Text, TextInput, Button, SegmentedButtons } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { signInWithGoogle } from '@/lib/auth/google';
 import { colors, spacing } from '@/lib/theme';
 
@@ -23,11 +23,6 @@ export default function LoginScreen() {
     setError('');
     setIsLoading(true);
     try {
-      if (BYPASS_AUTH) {
-        await useAuthStore.getState().mockGoogleLogin();
-        setIsLoading(false);
-        return;
-      }
       const success = await signInWithGoogle();
       if (success) {
         await fetchProfile();
@@ -45,26 +40,6 @@ export default function LoginScreen() {
     setIsLoading(true);
 
     try {
-      if (BYPASS_AUTH) {
-        const cleaned = phone.replace(/[^\d+]/g, '');
-        const formattedPhone = cleaned.startsWith('+') ? cleaned : `+233${cleaned.replace(/^0/, '')}`;
-        const identifier = method === 'phone' ? formattedPhone : email.trim();
-
-        useAuthStore.getState().setMockTempData({
-          identifier,
-          method,
-          fullName: 'Beta Tester',
-          phone: formattedPhone,
-        });
-
-        router.push({
-          pathname: '/(auth)/verify-otp',
-          params: { method, identifier },
-        });
-        setIsLoading(false);
-        return;
-      }
-
       if (method === 'phone') {
         if (!phone.trim()) {
           setError('Please enter your phone number');

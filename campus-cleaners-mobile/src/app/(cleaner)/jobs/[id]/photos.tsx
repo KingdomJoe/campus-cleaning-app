@@ -2,14 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, Image } from 'react-native';
 import { Text, Button, Card } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
-import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 import { takePhoto, pickImage, uploadBookingPhoto } from '@/lib/api/uploads';
 import type { BookingPhoto } from '@/lib/database.types';
 import { colors, spacing, borderRadius } from '@/lib/theme';
-
-// Local cache for photos in mock mode
-const mockPhotosCache: Record<string, BookingPhoto[]> = {};
 
 export default function PhotosScreen() {
   const { id: bookingId } = useLocalSearchParams<{ id: string }>();
@@ -22,13 +19,6 @@ export default function PhotosScreen() {
 
   const loadPhotos = async () => {
     if (!bookingId) return;
-    if (BYPASS_AUTH) {
-      if (!mockPhotosCache[bookingId]) {
-        mockPhotosCache[bookingId] = [];
-      }
-      setPhotos([...mockPhotosCache[bookingId]]);
-      return;
-    }
     const { data } = await supabase
       .from('booking_photos')
       .select('*')
@@ -48,23 +38,8 @@ export default function PhotosScreen() {
         : await pickImage({ aspect: [4, 3], quality: 0.8 });
 
     if (uri) {
-      if (BYPASS_AUTH) {
-        if (!mockPhotosCache[bookingId]) {
-          mockPhotosCache[bookingId] = [];
-        }
-        const newPhoto: BookingPhoto = {
-          id: 'photo-id-' + Math.random().toString(36).substr(2, 9),
-          booking_id: bookingId,
-          photo_type: type,
-          file_url: uri,
-          uploaded_at: new Date().toISOString(),
-        };
-        mockPhotosCache[bookingId].push(newPhoto);
-        await loadPhotos();
-      } else {
-        await uploadBookingPhoto(bookingId, type, uri);
-        await loadPhotos();
-      }
+      await uploadBookingPhoto(bookingId, type, uri);
+      await loadPhotos();
     }
 
     setUploading(false);

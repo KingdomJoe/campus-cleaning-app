@@ -4,7 +4,7 @@ import { Text, Button } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { uploadAvatar, uploadDocument } from '@/lib/api/uploads';
 import { colors, spacing } from '@/lib/theme';
 
@@ -50,31 +50,6 @@ export default function VerifyOTPScreen() {
     setIsLoading(true);
 
     try {
-      if (BYPASS_AUTH) {
-        const tempData = useAuthStore.getState().mockTempData;
-        const role = useAuthStore.getState().mockTempRole || (tempData?.cleanerDetails ? 'cleaner' : 'client');
-        
-        const mockEmail = tempData?.method === 'email' ? tempData.identifier : (method === 'email' ? identifier : 'beta-tester@campuscleaners.com');
-        const mockPhone = tempData?.method === 'phone' ? tempData.identifier : (method === 'phone' ? identifier : '+233241234567');
-        const mockName = tempData?.fullName || 'Beta Tester';
-
-        await useAuthStore.getState().mockLogin(
-          mockEmail,
-          mockPhone,
-          mockName,
-          role,
-          tempData?.cleanerDetails
-        );
-
-        if (role === 'cleaner') {
-          router.replace('/(cleaner)/jobs');
-        } else {
-          router.replace('/(client)/home');
-        }
-        setIsLoading(false);
-        return;
-      }
-
       let result;
       if (method === 'phone') {
         result = await supabase.auth.verifyOtp({

@@ -4,7 +4,7 @@ import { Text, TextInput, Button, Chip, SegmentedButtons } from 'react-native-pa
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { pickImage } from '@/lib/api/uploads';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 
@@ -98,32 +98,6 @@ export default function RegisterCleanerScreen() {
       const formattedGuarantorPhone = cleanedGuarantorPhone
         ? (cleanedGuarantorPhone.startsWith('+') ? cleanedGuarantorPhone : `+233${cleanedGuarantorPhone.replace(/^0/, '')}`)
         : '';
-
-      if (BYPASS_AUTH) {
-        useAuthStore.getState().setMockTempData({
-          identifier: email.trim(),
-          method: 'email',
-          fullName: fullName.trim(),
-          phone: formattedPhone,
-          cleanerDetails: {
-            bio: bio.trim(),
-            skills: selectedSkills,
-            mobile_money_number: momoNumber.trim(),
-            guarantor_name: guarantorName.trim(),
-            guarantor_phone: formattedGuarantorPhone,
-          }
-        });
-
-        router.push({
-          pathname: '/(auth)/verify-otp',
-          params: {
-            method: 'email',
-            identifier: email.trim(),
-          },
-        });
-        setIsLoading(false);
-        return;
-      }
 
       // Save pending uploads to authStore so verify-otp can run them post-login
       useAuthStore.getState().setPendingUploads(documents, profilePhoto);
@@ -219,11 +193,6 @@ export default function RegisterCleanerScreen() {
     setIsLoading(true);
 
     try {
-      if (BYPASS_AUTH) {
-        await useAuthStore.getState().mockGoogleLogin();
-        setIsLoading(false);
-        return;
-      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

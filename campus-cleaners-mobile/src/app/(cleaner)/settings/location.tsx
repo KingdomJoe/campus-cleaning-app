@@ -4,7 +4,7 @@ import { Text, TextInput, Button, Card, ActivityIndicator } from 'react-native-p
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
-import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 
 export default function CleanerLocationSettings() {
@@ -68,31 +68,6 @@ export default function CleanerLocationSettings() {
       const fullLocationString = postalName.trim()
         ? `${address.trim()} | Postal: ${postalName.trim()}`
         : address.trim();
-
-      if (BYPASS_AUTH) {
-        const currentProfile = useAuthStore.getState().profile;
-        if (currentProfile) {
-          useAuthStore.getState().setProfile({
-            ...currentProfile,
-            location: fullLocationString,
-          });
-        }
-        if (gpsCoords) {
-          const currentCleanerProfile = useAuthStore.getState().cleanerProfile;
-          if (currentCleanerProfile) {
-            useAuthStore.getState().setCleanerProfile({
-              ...currentCleanerProfile,
-              current_lat: gpsCoords.lat,
-              current_lng: gpsCoords.lng,
-            });
-          }
-        }
-        setIsSaving(false);
-        Alert.alert('Success', 'Location settings updated successfully!', [
-          { text: 'OK', onPress: () => router.back() }
-        ]);
-        return;
-      }
 
       // Update profiles
       const { error: profileError } = await supabase

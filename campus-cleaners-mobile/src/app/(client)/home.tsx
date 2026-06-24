@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Text, Card, Avatar, Button } from 'react-native-paper';
 import { router } from 'expo-router';
-import { useAuthStore, BYPASS_AUTH } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import { supabase } from '@/lib/supabase';
 import type { ServiceType } from '@/lib/database.types';
@@ -22,45 +22,6 @@ export default function ClientHomeScreen() {
   }, [profile?.id]);
 
   const fetchServices = async () => {
-    if (BYPASS_AUTH) {
-      const mockServices: ServiceType[] = [
-        {
-          id: 'st-cleaning-1',
-          category: 'cleaning',
-          name: 'Express Room Cleaning',
-          description: 'Quick cleaning of floor, desk, and waste bin.',
-          base_price: 50.00,
-          is_active: true
-        },
-        {
-          id: 'st-cleaning-2',
-          category: 'cleaning',
-          name: 'Deep Apartment Cleaning',
-          description: 'Thorough cleaning including bathroom, kitchen, and windows.',
-          base_price: 120.00,
-          is_active: true
-        },
-        {
-          id: 'st-laundry-1',
-          category: 'laundry',
-          name: 'Wash & Fold',
-          description: 'Washing, drying, and folding of clothes.',
-          base_price: 5.00,
-          is_active: true
-        },
-        {
-          id: 'st-laundry-2',
-          category: 'laundry',
-          name: 'Wash & Iron',
-          description: 'Washing, drying, and ironing of clothes.',
-          base_price: 8.00,
-          is_active: true
-        }
-      ];
-      setServices(mockServices);
-      return;
-    }
-
     const { data } = await supabase
       .from('service_types')
       .select('*')
