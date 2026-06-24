@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { Text, TextInput, Button, SegmentedButtons } from 'react-native-paper';
 import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -97,7 +98,7 @@ export default function RegisterClientScreen() {
           email: email.trim(),
           password: password,
           options: {
-            emailRedirectTo: 'uberforcleaning://auth/callback',
+            emailRedirectTo: Linking.createURL('auth/callback'),
             data: {
               full_name: fullName.trim(),
               phone: formattedPhone,
@@ -133,7 +134,7 @@ export default function RegisterClientScreen() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'uberforcleaning://auth/callback',
+          redirectTo: Linking.createURL('auth/callback'),
           queryParams: {
             role: 'client',
           },

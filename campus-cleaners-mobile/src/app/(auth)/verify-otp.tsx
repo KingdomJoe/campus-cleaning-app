@@ -3,6 +3,7 @@ import { View, StyleSheet, TextInput as RNTextInput, KeyboardAvoidingView, Platf
 import { Text, Button, ActivityIndicator } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -179,7 +180,7 @@ export default function VerifyOTPScreen() {
         await supabase.auth.signInWithOtp({
           email: identifier!,
           options: {
-            emailRedirectTo: 'uberforcleaning://auth/callback',
+            emailRedirectTo: Linking.createURL('auth/callback'),
           }
         });
         Alert.alert('Link Resent', 'A new verification link has been sent to your email.');

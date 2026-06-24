@@ -3,6 +3,7 @@ import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert } f
 import { Text, TextInput, Button, SegmentedButtons } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { signInWithGoogle } from '@/lib/auth/google';
@@ -95,7 +96,7 @@ export default function LoginScreen() {
           const { error: otpError } = await supabase.auth.signInWithOtp({
             email: email.trim(),
             options: {
-              emailRedirectTo: 'uberforcleaning://auth/callback',
+              emailRedirectTo: Linking.createURL('auth/callback'),
             }
           });
           if (otpError) throw otpError;
