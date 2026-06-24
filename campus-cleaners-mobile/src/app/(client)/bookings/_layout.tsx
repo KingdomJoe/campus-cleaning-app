@@ -1,14 +1,17 @@
 import { Stack } from 'expo-router';
+import { useTheme } from 'react-native-paper';
 import { colors } from '@/lib/theme';
 
 export default function BookingsLayout() {
+  const theme = useTheme();
+
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.white,
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.onSurface,
         headerTitleStyle: { fontWeight: '600' },
-        contentStyle: { backgroundColor: colors.background },
+        contentStyle: { backgroundColor: theme.colors.background },
       }}
     >
       <Stack.Screen name="index" options={{ title: 'My Bookings' }} />

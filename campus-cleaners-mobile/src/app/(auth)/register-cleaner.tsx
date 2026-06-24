@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
-import { Text, TextInput, Button, Chip, SegmentedButtons } from 'react-native-paper';
+import { Text, TextInput, Button, Chip, SegmentedButtons, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,13 +16,6 @@ const SKILL_OPTIONS = [
   'Laundry',
 ];
 
-const DOCUMENT_TYPES = [
-  { key: 'ghana_card', label: 'Ghana Card *', required: true },
-  { key: 'student_id', label: 'Student ID', required: false },
-  { key: 'selfie', label: 'Selfie Photo *', required: true },
-  { key: 'guarantor_doc', label: 'Guarantor Document', required: false },
-];
-
 export default function RegisterCleanerScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -36,12 +29,11 @@ export default function RegisterCleanerScreen() {
   const [bio, setBio] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<Record<string, string | null>>({});
-  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [verificationMethod, setVerificationMethod] = useState<'phone' | 'email'>('email');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills((prev) =>
@@ -56,14 +48,6 @@ export default function RegisterCleanerScreen() {
     if (uri) setProfilePhoto(uri);
   };
 
-  const handleDocumentPick = async (docType: string) => {
-    const uri = await pickImage({ aspect: [4, 3] });
-    if (uri) {
-      setDocuments((prev) => ({ ...prev, [docType]: uri }));
-      Alert.alert('Saved', `${DOCUMENT_TYPES.find(d => d.key === docType)?.label} will be uploaded after verification`);
-    }
-  };
-
   const handleRegister = async () => {
     if (!fullName.trim() || !phone.trim() || !email.trim() || !momoNumber.trim()) {
       setError('Please fill in all required fields');
@@ -72,13 +56,6 @@ export default function RegisterCleanerScreen() {
 
     if (selectedSkills.length === 0) {
       setError('Please select at least one skill');
-      return;
-    }
-
-    const requiredDocs = DOCUMENT_TYPES.filter(d => d.required).map(d => d.key);
-    const missingDocs = requiredDocs.filter(key => !documents[key]);
-    if (missingDocs.length > 0) {
-      setError(`Please upload required documents: ${missingDocs.map(k => DOCUMENT_TYPES.find(d => d.key === k)?.label).join(', ')}`);
       return;
     }
 
@@ -105,7 +82,7 @@ export default function RegisterCleanerScreen() {
         : '';
 
       // Save pending uploads to authStore so verify-otp can run them post-login
-      useAuthStore.getState().setPendingUploads(documents, profilePhoto);
+      useAuthStore.getState().setPendingUploads({}, profilePhoto);
 
       // Sign up with OTP
       let signUpResult;
@@ -230,7 +207,7 @@ export default function RegisterCleanerScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <ScrollView
         contentContainerStyle={[
@@ -262,7 +239,7 @@ export default function RegisterCleanerScreen() {
           <Text style={styles.dividerText}>or register with email/phone</Text>
         </View>
 
-        <Text style={styles.title} variant="headlineMedium">
+        <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
           Register as Cleaner
         </Text>
         <Text style={styles.subtitle} variant="bodyMedium">
@@ -464,35 +441,6 @@ export default function RegisterCleanerScreen() {
             theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
             placeholder="024 123 4567"
           />
-
-          <Text style={styles.sectionLabel} variant="labelLarge">
-            Required Documents
-          </Text>
-
-          {DOCUMENT_TYPES.map((doc) => (
-            <View key={doc.key} style={styles.docRow}>
-              <View style={styles.docInfo}>
-                <Text style={styles.docLabel} variant="bodyMedium">
-                  {doc.label}
-                </Text>
-                <Text style={styles.docHint} variant="bodySmall">
-                  {doc.required ? 'Required' : 'Optional'}
-                </Text>
-              </View>
-              <Button
-                mode={documents[doc.key] ? 'contained' : 'outlined'}
-                onPress={() => handleDocumentPick(doc.key)}
-                loading={uploadingDoc === doc.key}
-                disabled={uploadingDoc !== null && uploadingDoc !== doc.key}
-                icon={documents[doc.key] ? 'check-circle' : 'file-upload'}
-                style={styles.docBtn}
-                contentStyle={styles.docBtnContent}
-                buttonColor={documents[doc.key] ? colors.success : colors.primary}
-              >
-                {documents[doc.key] ? 'Uploaded' : 'Upload'}
-              </Button>
-            </View>
-          ))}
         </View>
 
         {error ? (

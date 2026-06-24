@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Pressable, Alert, ScrollView } from 'react-native';
-import { Text, Card, Button, ActivityIndicator } from 'react-native-paper';
+import { Text, Card, Button, ActivityIndicator, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +12,7 @@ export default function RegisterRoleScreen() {
   const { session, profile, fetchProfile } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   const handleGoogleSignInUnified = async () => {
     setIsLoading(true);
@@ -73,7 +74,7 @@ export default function RegisterRoleScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       contentContainerStyle={[
         styles.scrollContent,
         {
@@ -84,7 +85,7 @@ export default function RegisterRoleScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Text style={styles.title} variant="headlineMedium">
+        <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
           {session ? 'Complete Your Account' : 'Join Uber for Cleaning'}
         </Text>
         <Text style={styles.subtitle} variant="bodyLarge">
@@ -93,7 +94,7 @@ export default function RegisterRoleScreen() {
       </View>
 
       {isLoading && (
-        <ActivityIndicator animating color={colors.primary} style={{ marginBottom: spacing.md }} />
+        <ActivityIndicator animating color={theme.colors.primary} style={{ marginBottom: spacing.md }} />
       )}
 
       {!session && (
@@ -107,7 +108,7 @@ export default function RegisterRoleScreen() {
             icon="google"
             style={styles.googleBtn}
             contentStyle={styles.googleBtnContent}
-            buttonColor={colors.primary}
+            buttonColor={theme.colors.primary}
             disabled={isLoading}
           >
             Continue with Google
@@ -123,34 +124,34 @@ export default function RegisterRoleScreen() {
 
       <View style={styles.cards}>
         <Pressable onPress={() => handleSelectRole('client')} disabled={isLoading}>
-          <Card style={styles.card} mode="contained">
+          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
             <Card.Content style={styles.cardContent}>
               <Text style={styles.cardIcon}>🏠</Text>
-              <Text style={styles.cardTitle} variant="titleLarge">
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]} variant="titleLarge">
                 I need cleaning
               </Text>
               <Text style={styles.cardDesc} variant="bodyMedium">
                 Book verified cleaners for your room, apartment, or laundry. Pay securely, chat in real-time.
               </Text>
-              <View style={styles.cardBadge}>
-                <Text style={styles.badgeText}>Client Account</Text>
+              <View style={[styles.cardBadge, { backgroundColor: theme.colors.primaryContainer }]}>
+                <Text style={[styles.badgeText, { color: theme.colors.primary }]}>Client Account</Text>
               </View>
             </Card.Content>
           </Card>
         </Pressable>
 
         <Pressable onPress={() => handleSelectRole('cleaner')} disabled={isLoading}>
-          <Card style={styles.card} mode="contained">
+          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
             <Card.Content style={styles.cardContent}>
               <Text style={styles.cardIcon}>🧹</Text>
-              <Text style={styles.cardTitle} variant="titleLarge">
+              <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]} variant="titleLarge">
                 I'm a cleaner
               </Text>
               <Text style={styles.cardDesc} variant="bodyMedium">
                 Join as a verified cleaner, accept jobs, earn money, and build your reputation on campus.
               </Text>
-              <View style={[styles.cardBadge, styles.cleanerBadge]}>
-                <Text style={styles.badgeText}>Cleaner Account</Text>
+              <View style={[styles.cardBadge, styles.cleanerBadge, { backgroundColor: theme.colors.secondaryContainer }]}>
+                <Text style={[styles.badgeText, { color: theme.colors.secondary }]}>Cleaner Account</Text>
               </View>
             </Card.Content>
           </Card>

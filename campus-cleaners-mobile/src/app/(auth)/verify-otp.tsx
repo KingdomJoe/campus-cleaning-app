@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, TextInput as RNTextInput, KeyboardAvoidingView, Platform, Alert, ScrollView, Animated } from 'react-native';
-import { Text, Button, ActivityIndicator } from 'react-native-paper';
+import { Text, Button, ActivityIndicator, useTheme } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
@@ -13,6 +13,7 @@ import { colors, spacing } from '@/lib/theme';
 const OTP_LENGTH = 6;
 
 export default function VerifyOTPScreen() {
+  const theme = useTheme();
   const { method, identifier } = useLocalSearchParams<{
     method: 'phone' | 'email';
     identifier: string;
@@ -193,7 +194,7 @@ export default function VerifyOTPScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <ScrollView
         contentContainerStyle={[
@@ -208,11 +209,11 @@ export default function VerifyOTPScreen() {
         <View style={styles.content}>
           {method === 'email' ? (
             <View style={styles.emailPromptContainer}>
-              <Animated.View style={[styles.iconCircle, { transform: [{ scale: pulseAnim }] }]}>
-                <MaterialCommunityIcons name="email-fast" size={44} color={colors.primary} />
+              <Animated.View style={[styles.iconCircle, { backgroundColor: theme.colors.surfaceVariant, transform: [{ scale: pulseAnim }] }]}>
+                <MaterialCommunityIcons name="email-fast" size={44} color={theme.colors.primary} />
               </Animated.View>
 
-              <Text style={styles.emailTitle} variant="headlineMedium">
+              <Text style={[styles.emailTitle, { color: theme.colors.onBackground }]} variant="headlineMedium">
                 Verify Your Account
               </Text>
 
@@ -229,7 +230,7 @@ export default function VerifyOTPScreen() {
               </Text>
 
               <View style={styles.statusRow}>
-                <ActivityIndicator size={16} color={colors.primary} style={{ marginRight: 8 }} />
+                <ActivityIndicator size={16} color={theme.colors.primary} style={{ marginRight: 8 }} />
                 <Text style={styles.statusText} variant="bodySmall">
                   Waiting for verification...
                 </Text>
@@ -242,7 +243,7 @@ export default function VerifyOTPScreen() {
                 disabled={isLoading}
                 style={styles.btn}
                 contentStyle={styles.btnContent}
-                buttonColor={colors.primary}
+                buttonColor={theme.colors.primary}
               >
                 Resend Verification Link
               </Button>
@@ -250,7 +251,7 @@ export default function VerifyOTPScreen() {
               <Button
                 mode="text"
                 onPress={() => router.back()}
-                textColor={colors.onSurfaceVariant}
+                textColor={theme.colors.onSurfaceVariant}
                 style={styles.resendBtn}
               >
                 ← Go back
@@ -259,7 +260,7 @@ export default function VerifyOTPScreen() {
           ) : (
             // SMS OTP input layout
             <View>
-              <Text style={styles.title} variant="headlineMedium">
+              <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
                 Verify OTP
               </Text>
               <Text style={styles.subtitle} variant="bodyLarge">
@@ -274,7 +275,7 @@ export default function VerifyOTPScreen() {
                   <RNTextInput
                     key={index}
                     ref={(ref) => { inputRefs.current[index] = ref; }}
-                    style={[styles.otpInput, digit ? styles.otpFilled : null]}
+                    style={[styles.otpInput, digit ? styles.otpFilled : null, { color: theme.colors.onSurface, backgroundColor: theme.colors.surfaceVariant, borderColor: digit ? theme.colors.primary : theme.colors.outline }]}
                     value={digit}
                     onChangeText={(text) => handleChange(text.slice(-1), index)}
                     onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
@@ -298,7 +299,7 @@ export default function VerifyOTPScreen() {
                 disabled={isLoading || otp.some((d) => !d)}
                 style={styles.btn}
                 contentStyle={styles.btnContent}
-                buttonColor={colors.primary}
+                buttonColor={theme.colors.primary}
               >
                 Verify
               </Button>

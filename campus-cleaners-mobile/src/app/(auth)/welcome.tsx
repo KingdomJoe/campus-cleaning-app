@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button } from 'react-native-paper';
+import { Text, Button, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '@/lib/theme';
@@ -8,10 +8,11 @@ import Logo from '@/components/Logo';
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       contentContainerStyle={[
         styles.scrollContent,
         {
@@ -23,7 +24,7 @@ export default function WelcomeScreen() {
     >
       <View style={styles.hero}>
         <Logo size={96} style={styles.logo} />
-        <Text style={styles.title} variant="headlineLarge">
+        <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineLarge">
           Uber for Cleaning
         </Text>
         <Text style={styles.description} variant="bodyLarge">

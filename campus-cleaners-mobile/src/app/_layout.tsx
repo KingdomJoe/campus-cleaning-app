@@ -5,15 +5,18 @@ import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
-import { theme } from '@/lib/theme';
+import { lightTheme, darkTheme } from '@/lib/theme';
 import { useAuthStore } from '@/stores/authStore';
+import { useThemeStore } from '@/stores/themeStore';
 import { setupNotificationResponseHandler } from '@/lib/notifications';
 
 export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
+  const { themeMode, initializeTheme } = useThemeStore();
 
   useEffect(() => {
     initialize();
+    initializeTheme();
 
     const handleUrl = async (url: string) => {
       if (url.includes('access_token=')) {
@@ -48,14 +51,16 @@ export default function RootLayout() {
     };
   }, [initialize]);
 
+  const activeTheme = themeMode === 'dark' ? darkTheme : lightTheme;
+
   return (
     <SafeAreaProvider>
-      <PaperProvider theme={theme}>
-        <StatusBar style="light" />
+      <PaperProvider theme={activeTheme}>
+        <StatusBar style={themeMode === 'dark' ? 'light' : 'dark'} />
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: theme.colors.background },
+            contentStyle: { backgroundColor: activeTheme.colors.background },
             animation: 'slide_from_right',
           }}
         >

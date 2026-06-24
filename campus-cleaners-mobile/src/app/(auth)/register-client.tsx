@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { Text, TextInput, Button, SegmentedButtons } from 'react-native-paper';
+import { Text, TextInput, Button, SegmentedButtons, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { colors, spacing } from '@/lib/theme';
 import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 
 export default function RegisterClientScreen() {
+  const theme = useTheme();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -152,7 +153,7 @@ export default function RegisterClientScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <ScrollView
         contentContainerStyle={[
@@ -184,7 +185,7 @@ export default function RegisterClientScreen() {
           <Text style={styles.dividerText}>or register with details</Text>
         </View>
 
-        <Text style={styles.title} variant="headlineMedium">
+        <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
           Create Client Account
         </Text>
         <Text style={styles.subtitle} variant="bodyMedium">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { Text, Card, Avatar, Button } from 'react-native-paper';
+import { Text, Card, Avatar, Button, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
@@ -10,6 +10,7 @@ import BookingCard from '@/components/BookingCard';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 
 export default function ClientHomeScreen() {
+  const theme = useTheme();
   const { profile } = useAuthStore();
   const { activeBookings, fetchClientBookings } = useBookingStore();
   const [services, setServices] = useState<ServiceType[]>([]);
@@ -37,14 +38,14 @@ export default function ClientHomeScreen() {
   const laundryServices = services.filter((s) => s.category === 'laundry');
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
       {/* Greeting */}
       <View style={styles.greeting}>
         <View>
           <Text style={styles.hello} variant="bodyLarge">
             Hello, {firstName} 👋
           </Text>
-          <Text style={styles.greetingTitle} variant="headlineSmall">
+          <Text style={[styles.greetingTitle, { color: theme.colors.onBackground }]} variant="headlineSmall">
             What do you need today?
           </Text>
         </View>
@@ -59,7 +60,7 @@ export default function ClientHomeScreen() {
       {/* Active Booking Banner */}
       {activeBookings.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle} variant="titleMedium">
+          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]} variant="titleMedium">
             Active Bookings
           </Text>
           {activeBookings.slice(0, 2).map((booking) => (
@@ -75,7 +76,7 @@ export default function ClientHomeScreen() {
 
       {/* Cleaning Services */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle} variant="titleMedium">
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]} variant="titleMedium">
           🧹 Cleaning Services
         </Text>
         <View style={styles.serviceGrid}>
@@ -91,12 +92,12 @@ export default function ClientHomeScreen() {
                 router.push('/(client)/book/cleaning');
               }}
             >
-              <Card style={styles.serviceCardInner} mode="contained">
+              <Card style={[styles.serviceCardInner, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
                 <Card.Content style={styles.serviceContent}>
                   <Text style={styles.serviceIcon}>
                     {service.name.includes('Express') ? '⚡' : service.name.includes('Deep') ? '🔥' : '📦'}
                   </Text>
-                  <Text style={styles.serviceName} variant="titleSmall">
+                  <Text style={[styles.serviceName, { color: theme.colors.onSurface }]} variant="titleSmall">
                     {service.name}
                   </Text>
                   <Text style={styles.servicePrice} variant="bodySmall">
@@ -111,7 +112,7 @@ export default function ClientHomeScreen() {
 
       {/* Laundry Services */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle} variant="titleMedium">
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]} variant="titleMedium">
           👕 Laundry Services
         </Text>
         <View style={styles.serviceGrid}>
@@ -127,12 +128,12 @@ export default function ClientHomeScreen() {
                 router.push('/(client)/book/laundry');
               }}
             >
-              <Card style={styles.serviceCardInner} mode="contained">
+              <Card style={[styles.serviceCardInner, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
                 <Card.Content style={styles.serviceContent}>
                   <Text style={styles.serviceIcon}>
                     {service.name.includes('Iron') ? '🔥' : '🧺'}
                   </Text>
-                  <Text style={styles.serviceName} variant="titleSmall">
+                  <Text style={[styles.serviceName, { color: theme.colors.onSurface }]} variant="titleSmall">
                     {service.name}
                   </Text>
                   <Text style={styles.servicePrice} variant="bodySmall">
@@ -150,7 +151,7 @@ export default function ClientHomeScreen() {
         mode="outlined"
         icon="magnify"
         onPress={() => router.push('/(client)/book')}
-        textColor={colors.primary}
+        textColor={theme.colors.primary}
         style={styles.findBtn}
       >
         Browse All Services

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
-import { Text, TextInput, Button, SegmentedButtons } from 'react-native-paper';
+import { Text, TextInput, Button, SegmentedButtons, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
@@ -12,6 +12,7 @@ import { colors, spacing } from '@/lib/theme';
 type LoginMethod = 'phone' | 'email';
 
 export default function LoginScreen() {
+  const theme = useTheme();
   const [method, setMethod] = useState<LoginMethod>('phone');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -124,7 +125,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <ScrollView
         contentContainerStyle={[
@@ -137,7 +138,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.title} variant="headlineMedium">
+          <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
             Welcome back
           </Text>
           <Text style={styles.subtitle} variant="bodyLarge">

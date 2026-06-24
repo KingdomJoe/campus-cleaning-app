@@ -1,12 +1,15 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { Text, Button, Card, Avatar, Divider } from 'react-native-paper';
+import { Text, Button, Card, Avatar, Divider, Switch, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { colors, spacing, borderRadius } from '@/lib/theme';
+import { useThemeStore } from '@/stores/themeStore';
 
 export default function ProfileScreen() {
+  const theme = useTheme();
   const { profile, signOut } = useAuthStore();
+  const { themeMode, toggleTheme } = useThemeStore();
 
   const handleSignOut = async () => {
     await signOut();
@@ -14,7 +17,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Avatar.Text
           size={72}
@@ -22,7 +25,7 @@ export default function ProfileScreen() {
           style={styles.avatar}
           color={colors.white}
         />
-        <Text style={styles.name} variant="headlineSmall">
+        <Text style={[styles.name, { color: theme.colors.onBackground }]} variant="headlineSmall">
           {profile?.full_name ?? 'User'}
         </Text>
         <Text style={styles.role} variant="bodyMedium">
@@ -30,18 +33,33 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
-      <Card style={styles.card} mode="contained">
+      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
         <Card.Content>
           <InfoRow icon="📱" label="Phone" value={profile?.phone ?? '—'} />
-          <Divider style={styles.divider} />
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
           <InfoRow icon="📧" label="Email" value={profile?.email ?? '—'} />
-          <Divider style={styles.divider} />
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
           <Pressable onPress={() => router.push('/(client)/settings/location' as any)}>
             <InfoRow icon="📍" label="Location (Tap to change)" value={profile?.location ?? 'Not set'} />
           </Pressable>
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+          <View style={infoStyles.row}>
+            <Text style={infoStyles.icon}>🌓</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[infoStyles.label, { color: theme.colors.onSurfaceVariant }]} variant="labelSmall">App Theme</Text>
+              <Text style={[infoStyles.value, { color: theme.colors.onSurface }]} variant="bodyMedium">
+                {themeMode === 'dark' ? 'Dark Mode' : 'Light Mode'}
+              </Text>
+            </View>
+            <Switch
+              value={themeMode === 'dark'}
+              onValueChange={toggleTheme}
+              color={theme.colors.primary}
+            />
+          </View>
           {profile?.room_number && (
             <>
-              <Divider style={styles.divider} />
+              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
               <InfoRow icon="🚪" label="Room Number" value={profile.room_number} />
             </>
           )}
@@ -52,8 +70,8 @@ export default function ProfileScreen() {
         mode="outlined"
         icon="logout"
         onPress={handleSignOut}
-        textColor={colors.error}
-        style={styles.logoutBtn}
+        textColor={theme.colors.error}
+        style={[styles.logoutBtn, { borderColor: theme.colors.error }]}
       >
         Sign Out
       </Button>
@@ -77,7 +95,7 @@ const infoStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   icon: { fontSize: 20, width: 28, textAlign: 'center' },
   label: { color: colors.onSurfaceVariant },
-  value: { color: colors.white, fontWeight: '500' },
+  value: { color: colors.onSurface, fontWeight: '500' },
 });
 
 const styles = StyleSheet.create({
@@ -85,7 +103,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   header: { alignItems: 'center', paddingVertical: spacing.xl },
   avatar: { backgroundColor: colors.primaryDark, marginBottom: spacing.md },
-  name: { color: colors.white, fontWeight: '700' },
+  name: { color: colors.onBackground, fontWeight: '700' },
   role: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   card: { backgroundColor: colors.surfaceVariant, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.outline, marginTop: spacing.lg },
   divider: { backgroundColor: colors.outline },

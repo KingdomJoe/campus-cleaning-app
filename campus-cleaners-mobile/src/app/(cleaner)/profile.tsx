@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { Text, Button, Card, Avatar, Divider, Chip } from 'react-native-paper';
+import { Text, Button, Card, Avatar, Divider, Chip, Switch, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import StarRating from '@/components/StarRating';
 import { colors, spacing, borderRadius } from '@/lib/theme';
+import { useThemeStore } from '@/stores/themeStore';
 
 const verificationStatusConfig = {
   pending: { label: 'Pending Verification', color: colors.warning, icon: '⏳' },
@@ -14,6 +15,8 @@ const verificationStatusConfig = {
 
 export default function CleanerProfileScreen() {
   const { profile, cleanerProfile, signOut } = useAuthStore();
+  const { themeMode, toggleTheme } = useThemeStore();
+  const theme = useTheme();
 
   const handleSignOut = async () => {
     await signOut();
@@ -24,7 +27,7 @@ export default function CleanerProfileScreen() {
     verificationStatusConfig[cleanerProfile?.verification_status ?? 'pending'];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
       {/* Header */}
       <View style={styles.header}>
         <Avatar.Text
@@ -33,7 +36,7 @@ export default function CleanerProfileScreen() {
           style={styles.avatar}
           color={colors.white}
         />
-        <Text style={styles.name} variant="headlineSmall">
+        <Text style={[styles.name, { color: theme.colors.onBackground }]} variant="headlineSmall">
           {profile?.full_name ?? 'Cleaner'}
         </Text>
         <Text style={styles.role} variant="bodyMedium">🧹 Cleaner</Text>
@@ -60,10 +63,10 @@ export default function CleanerProfileScreen() {
       </View>
 
       {/* Personal Info */}
-      <Card style={styles.card} mode="contained">
+      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
         <Card.Content>
-          <Text style={styles.sectionTitle} variant="labelLarge">Personal Information</Text>
-          <Divider style={styles.divider} />
+          <Text style={[styles.sectionTitle, { color: theme.colors.primary }]} variant="labelLarge">Personal Information</Text>
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
           <InfoRow icon="📱" label="Phone" value={profile?.phone ?? '—'} />
           <InfoRow icon="📧" label="Email" value={profile?.email ?? '—'} />
           <Pressable onPress={() => router.push('/(cleaner)/settings/location' as any)}>
@@ -80,10 +83,10 @@ export default function CleanerProfileScreen() {
       </Card>
 
       {/* Cleaner Details */}
-      <Card style={styles.card} mode="contained">
+      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
         <Card.Content>
-          <Text style={styles.sectionTitle} variant="labelLarge">Work Details</Text>
-          <Divider style={styles.divider} />
+          <Text style={[styles.sectionTitle, { color: theme.colors.primary }]} variant="labelLarge">Work Details</Text>
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
           <InfoRow icon="💰" label="MoMo Number" value={cleanerProfile?.mobile_money_number ?? '—'} />
           <InfoRow icon="👤" label="Guarantor" value={cleanerProfile?.guarantor_name ?? '—'} />
           <InfoRow
@@ -94,9 +97,9 @@ export default function CleanerProfileScreen() {
 
           {cleanerProfile?.bio && (
             <>
-              <Divider style={styles.divider} />
+              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
               <Text style={styles.bioLabel} variant="labelSmall">Bio</Text>
-              <Text style={styles.bioText} variant="bodyMedium">
+              <Text style={[styles.bioText, { color: theme.colors.onSurface }]} variant="bodyMedium">
                 {cleanerProfile.bio}
               </Text>
             </>
@@ -104,7 +107,7 @@ export default function CleanerProfileScreen() {
 
           {cleanerProfile?.skills && cleanerProfile.skills.length > 0 && (
             <>
-              <Divider style={styles.divider} />
+              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
               <Text style={styles.bioLabel} variant="labelSmall">Skills</Text>
               <View style={styles.skillsRow}>
                 {cleanerProfile.skills.map((skill) => (
@@ -123,12 +126,34 @@ export default function CleanerProfileScreen() {
         </Card.Content>
       </Card>
 
+      {/* App Settings */}
+      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
+        <Card.Content>
+          <Text style={[styles.sectionTitle, { color: theme.colors.primary }]} variant="labelLarge">App Settings</Text>
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+          <View style={infoStyles.row}>
+            <Text style={infoStyles.icon}>🌓</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[infoStyles.label, { color: theme.colors.onSurfaceVariant }]} variant="labelSmall">App Theme</Text>
+              <Text style={[infoStyles.value, { color: theme.colors.onSurface }]} variant="bodyMedium">
+                {themeMode === 'dark' ? 'Dark Mode' : 'Light Mode'}
+              </Text>
+            </View>
+            <Switch
+              value={themeMode === 'dark'}
+              onValueChange={toggleTheme}
+              color={theme.colors.primary}
+            />
+          </View>
+        </Card.Content>
+      </Card>
+
       <Button
         mode="outlined"
         icon="logout"
         onPress={handleSignOut}
-        textColor={colors.error}
-        style={styles.logoutBtn}
+        textColor={theme.colors.error}
+        style={[styles.logoutBtn, { borderColor: theme.colors.error }]}
       >
         Sign Out
       </Button>
@@ -152,7 +177,7 @@ const infoStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   icon: { fontSize: 20, width: 28, textAlign: 'center' },
   label: { color: colors.onSurfaceVariant },
-  value: { color: colors.white, fontWeight: '500' },
+  value: { color: colors.onSurface, fontWeight: '500' },
 });
 
 const styles = StyleSheet.create({
@@ -160,7 +185,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   header: { alignItems: 'center', paddingVertical: spacing.xl },
   avatar: { backgroundColor: colors.primaryDark, marginBottom: spacing.md },
-  name: { color: colors.white, fontWeight: '700' },
+  name: { color: colors.onBackground, fontWeight: '700' },
   role: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   verificationChip: { marginTop: spacing.md, backgroundColor: 'transparent' },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },

@@ -1,24 +1,27 @@
 import { Tabs } from 'expo-router';
-import { colors } from '@/lib/theme';
+import { useTheme } from 'react-native-paper';
+import { colors, spacing } from '@/lib/theme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 export default function ClientLayout() {
+  const theme = useTheme();
+
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.white,
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.onSurface,
         headerTitleStyle: { fontWeight: '600' },
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.outline,
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.outline,
           borderTopWidth: 1,
           height: 60,
           paddingBottom: 8,
           paddingTop: 4,
         },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.onSurfaceVariant,
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >

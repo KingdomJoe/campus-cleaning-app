@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { ActivityIndicator, Text } from 'react-native-paper';
+import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { colors } from '@/lib/theme';
@@ -8,6 +8,7 @@ import Logo from '@/components/Logo';
 
 export default function IndexScreen() {
   const { isLoading, isInitialized, session, role, profile } = useAuthStore();
+  const theme = useTheme();
 
   useEffect(() => {
     if (!isInitialized || isLoading) return;
@@ -31,9 +32,9 @@ export default function IndexScreen() {
   }, [isInitialized, isLoading, session, role, profile]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Logo size={96} style={styles.logo} />
-      <Text style={styles.title} variant="headlineMedium">
+      <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
         Uber for Cleaning
       </Text>
       <ActivityIndicator
