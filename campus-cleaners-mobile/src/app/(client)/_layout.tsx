@@ -1,17 +1,52 @@
+import React, { useState } from "react";
 import { Tabs } from "expo-router";
+import { Stack } from "expo-router";
 import { useTheme } from "react-native-paper";
-
+import { SafeAreaView } from "react-native-safe-area-context";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import Sidebar from "@/components/Sidebar";
 
 export default function ClientLayout() {
+  const theme = useTheme();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.onSurface,
+        headerTitleStyle: { fontWeight: "600" },
+        headerLeft: () => (
+          <MaterialCommunityIcons
+            name="menu"
+            size={28}
+            color={theme.colors.onSurface}
+            style={{ marginLeft: 12 }}
+            onPress={() => setSidebarOpen(true)}
+          />
+        ),
+      }}
+    >
+      <Stack.Screen
+        name="client-tabs"
+        options={{ headerShown: true, title: "Campus Cleaners" }}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+          <ClientTabs />
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} userRole="client" />
+        </SafeAreaView>
+      </Stack.Screen>
+    </Stack>
+  );
+}
+
+function ClientTabs() {
   const theme = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.surface },
-        headerTintColor: theme.colors.onSurface,
-        headerTitleStyle: { fontWeight: "600" },
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.outline,
@@ -29,7 +64,6 @@ export default function ClientLayout() {
         name="home"
         options={{
           title: "Home",
-          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="home" size={size} color={color} />
           ),
@@ -39,13 +73,8 @@ export default function ClientLayout() {
         name="book"
         options={{
           title: "Book",
-          headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons
-              name="plus-circle"
-              size={size}
-              color={color}
-            />
+            <MaterialCommunityIcons name="plus-circle" size={size} color={color} />
           ),
         }}
       />
@@ -53,13 +82,8 @@ export default function ClientLayout() {
         name="bookings"
         options={{
           title: "Bookings",
-          headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons
-              name="clipboard-list"
-              size={size}
-              color={color}
-            />
+            <MaterialCommunityIcons name="clipboard-list" size={size} color={color} />
           ),
         }}
       />

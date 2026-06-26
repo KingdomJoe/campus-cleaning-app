@@ -7,6 +7,7 @@ import { useBookingStore } from "@/stores/bookingStore";
 import { supabase } from "@/lib/supabase";
 import type { ServiceType } from "@/lib/database.types";
 import BookingCard from "@/components/BookingCard";
+import EmptyState from "@/components/EmptyState";
 import { colors, spacing, borderRadius } from "@/lib/theme";
 
 export default function ClientHomeScreen() {
@@ -14,16 +15,29 @@ export default function ClientHomeScreen() {
   const { profile } = useAuthStore();
   const { activeBookings, fetchClientBookings } = useBookingStore();
   const [services, setServices] = useState<ServiceType[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [servicesError, setServicesError] = useState<string | null>(null);
   const profileId = profile?.id;
 
   const fetchServices = useCallback(async () => {
-    const { data } = await supabase
-      .from("service_types")
-      .select("*")
-      .eq("is_active", true)
-      .order("category");
-    // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
-    if (data) setServices(data);
+    setServicesLoading(true);
+    setServicesError(null);
+    try {
+      const { data, error } = await supabase
+        .from("service_types")
+        .select("*")
+        .eq("is_active", true)
+        .order("category");
+      if (error) throw error;
+      // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
+      if (data) setServices(data);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load services";
+      setServicesError(message);
+      console.error("Error fetching services:", err);
+    } finally {
+      setServicesLoading(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -97,54 +111,84 @@ export default function ClientHomeScreen() {
         >
           🧹 Cleaning Services
         </Text>
-        <View style={styles.serviceGrid}>
-          {cleaningServices.map((service) => (
-            <Pressable
-              key={service.id}
-              style={styles.serviceCard}
-              onPress={() => {
-                useBookingStore.getState().updateForm({
-                  serviceCategory: "cleaning",
-                  serviceTypeId: service.id,
-                });
-                router.push("/(client)/book/cleaning");
-              }}
-            >
-              <Card
-                style={[
-                  styles.serviceCardInner,
-                  {
-                    backgroundColor: theme.colors.surfaceVariant,
-                    borderColor: theme.colors.outline,
-                  },
-                ]}
-                mode="contained"
+        {servicesLoading ? (
+          <View style={styles.loadingGrid}>
+            {[1, 2].map((i) => (
+              <View key={i} style={styles.serviceCard}>
+                <Card style={[styles.serviceCardInner, { backgroundColor: theme.colors.surfaceVariant }]} mode="contained">
+                  <Card.Content style={styles.serviceContent}>
+                    <View style={[styles.serviceIcon, { backgroundColor: theme.colors.surfaceVariant }]} />
+                    <View style={[styles.skeleton, styles.skeletonText]} />
+                    <View style={[styles.skeleton, styles.skeletonPrice]} />
+                  </Card.Content>
+                </Card>
+              </View>
+            ))}
+          </View>
+        ) : servicesError ? (
+          <EmptyState
+            icon="⚠️"
+            title="Failed to load services"
+            subtitle={servicesError}
+            theme={theme}
+          />
+        ) : cleaningServices.length === 0 ? (
+          <EmptyState
+            icon="🧹"
+            title="No cleaning services available"
+            subtitle="Check back later for new offerings"
+            theme={theme}
+          />
+        ) : (
+          <View style={styles.serviceGrid}>
+            {cleaningServices.map((service) => (
+              <Pressable
+                key={service.id}
+                style={styles.serviceCard}
+                onPress={() => {
+                  useBookingStore.getState().updateForm({
+                    serviceCategory: "cleaning",
+                    serviceTypeId: service.id,
+                  });
+                  router.push("/(client)/book/cleaning");
+                }}
               >
-                <Card.Content style={styles.serviceContent}>
-                  <Text style={styles.serviceIcon}>
-                    {service.name.includes("Express")
-                      ? "⚡"
-                      : service.name.includes("Deep")
-                        ? "🔥"
-                        : "📦"}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.serviceName,
-                      { color: theme.colors.onSurface },
-                    ]}
-                    variant="titleSmall"
-                  >
-                    {service.name}
-                  </Text>
-                  <Text style={styles.servicePrice} variant="bodySmall">
-                    From GH₵ {service.base_price}
-                  </Text>
-                </Card.Content>
-              </Card>
-            </Pressable>
-          ))}
-        </View>
+                <Card
+                  style={[
+                    styles.serviceCardInner,
+                    {
+                      backgroundColor: theme.colors.surfaceVariant,
+                      borderColor: theme.colors.outline,
+                    },
+                  ]}
+                  mode="contained"
+                >
+                  <Card.Content style={styles.serviceContent}>
+                    <Text style={styles.serviceIcon}>
+                      {service.name.includes("Express")
+                        ? "⚡"
+                        : service.name.includes("Deep")
+                          ? "🔥"
+                          : "📦"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.serviceName,
+                        { color: theme.colors.onSurface },
+                      ]}
+                      variant="titleSmall"
+                    >
+                      {service.name}
+                    </Text>
+                    <Text style={styles.servicePrice} variant="bodySmall">
+                      From GH₵ {service.base_price}
+                    </Text>
+                  </Card.Content>
+                </Card>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Laundry Services */}
@@ -155,50 +199,80 @@ export default function ClientHomeScreen() {
         >
           👕 Laundry Services
         </Text>
-        <View style={styles.serviceGrid}>
-          {laundryServices.map((service) => (
-            <Pressable
-              key={service.id}
-              style={styles.serviceCard}
-              onPress={() => {
-                useBookingStore.getState().updateForm({
-                  serviceCategory: "laundry",
-                  serviceTypeId: service.id,
-                });
-                router.push("/(client)/book/laundry");
-              }}
-            >
-              <Card
-                style={[
-                  styles.serviceCardInner,
-                  {
-                    backgroundColor: theme.colors.surfaceVariant,
-                    borderColor: theme.colors.outline,
-                  },
-                ]}
-                mode="contained"
+        {servicesLoading ? (
+          <View style={styles.loadingGrid}>
+            {[1, 2, 3].map((i) => (
+              <View key={i} style={styles.serviceCard}>
+                <Card style={[styles.serviceCardInner, { backgroundColor: theme.colors.surfaceVariant }]} mode="contained">
+                  <Card.Content style={styles.serviceContent}>
+                    <View style={[styles.serviceIcon, { backgroundColor: theme.colors.surfaceVariant }]} />
+                    <View style={[styles.skeleton, styles.skeletonText]} />
+                    <View style={[styles.skeleton, styles.skeletonPrice]} />
+                  </Card.Content>
+                </Card>
+              </View>
+            ))}
+          </View>
+        ) : servicesError ? (
+          <EmptyState
+            icon="⚠️"
+            title="Failed to load services"
+            subtitle={servicesError}
+            theme={theme}
+          />
+        ) : laundryServices.length === 0 ? (
+          <EmptyState
+            icon="👕"
+            title="No laundry services available"
+            subtitle="Check back later for new offerings"
+            theme={theme}
+          />
+        ) : (
+          <View style={styles.serviceGrid}>
+            {laundryServices.map((service) => (
+              <Pressable
+                key={service.id}
+                style={styles.serviceCard}
+                onPress={() => {
+                  useBookingStore.getState().updateForm({
+                    serviceCategory: "laundry",
+                    serviceTypeId: service.id,
+                  });
+                  router.push("/(client)/book/laundry");
+                }}
               >
-                <Card.Content style={styles.serviceContent}>
-                  <Text style={styles.serviceIcon}>
-                    {service.name.includes("Iron") ? "🔥" : "🧺"}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.serviceName,
-                      { color: theme.colors.onSurface },
-                    ]}
-                    variant="titleSmall"
-                  >
-                    {service.name}
-                  </Text>
-                  <Text style={styles.servicePrice} variant="bodySmall">
-                    From GH₵ {service.base_price}/item
-                  </Text>
-                </Card.Content>
-              </Card>
-            </Pressable>
-          ))}
-        </View>
+                <Card
+                  style={[
+                    styles.serviceCardInner,
+                    {
+                      backgroundColor: theme.colors.surfaceVariant,
+                      borderColor: theme.colors.outline,
+                    },
+                  ]}
+                  mode="contained"
+                >
+                  <Card.Content style={styles.serviceContent}>
+                    <Text style={styles.serviceIcon}>
+                      {service.name.includes("Iron") ? "🔥" : "🧺"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.serviceName,
+                        { color: theme.colors.onSurface },
+                      ]}
+                      variant="titleSmall"
+                    >
+                      {service.name}
+                    </Text>
+                    <Text style={styles.servicePrice} variant="bodySmall">
+                      From GH₵ {service.base_price}/item
+                    </Text>
+                  </Card.Content>
+                </Card>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Quick Action */}
@@ -251,6 +325,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.md,
   },
+  loadingGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+  },
   serviceCard: {
     width: "47%",
   },
@@ -266,6 +345,9 @@ const styles = StyleSheet.create({
   serviceIcon: {
     fontSize: 32,
     marginBottom: spacing.xs,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   serviceName: {
     fontWeight: "600",
@@ -279,5 +361,18 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     borderRadius: 12,
     marginTop: spacing.md,
+  },
+  skeleton: {
+    backgroundColor: colors.outline,
+    borderRadius: 4,
+  },
+  skeletonText: {
+    width: "80%",
+    height: 16,
+    marginBottom: spacing.xs,
+  },
+  skeletonPrice: {
+    width: "50%",
+    height: 14,
   },
 });

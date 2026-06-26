@@ -159,6 +159,12 @@ export default function RegisterCleanerScreen() {
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed';
+      // Log full error for debugging
+      console.error('Registration error:', err);
+      if (err && typeof err === 'object' && 'status' in err) {
+        console.error('Error status:', (err as any).status);
+        console.error('Error statusText:', (err as any).statusText);
+      }
       setError(message);
     } finally {
       setIsLoading(false);
