@@ -54,6 +54,103 @@ export default function ClientHomeScreen() {
   const cleaningServices = services.filter((s) => s.category === "cleaning");
   const laundryServices = services.filter((s) => s.category === "laundry");
 
+  const renderServiceSection = (
+    title: string,
+    icon: string,
+    services: ServiceType[],
+    category: "cleaning" | "laundry",
+    iconMap: Record<string, string>
+  ) => {
+    if (servicesLoading) {
+      return (
+        <View style={styles.loadingGrid}>
+          {Array.from({ length: category === "cleaning" ? 2 : 3 }, (_, i) => (
+            <View key={i} style={styles.serviceCard}>
+              <Card style={[styles.serviceCardInner, { backgroundColor: theme.colors.surfaceVariant }]} mode="contained">
+                <Card.Content style={styles.serviceContent}>
+                  <View style={[styles.serviceIcon, { backgroundColor: theme.colors.surfaceVariant }]} />
+                  <View style={[styles.skeleton, styles.skeletonText]} />
+                  <View style={[styles.skeleton, styles.skeletonPrice]} />
+                </Card.Content>
+              </Card>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    if (servicesError) {
+      return (
+        <EmptyState
+          icon="⚠️"
+          title="Failed to load services"
+          subtitle={servicesError}
+          theme={theme}
+          actionLabel="Retry"
+          onAction={fetchServices}
+        />
+      );
+    }
+
+    if (services.length === 0) {
+      return (
+        <EmptyState
+          icon={icon}
+          title={`No ${title.toLowerCase()} available`}
+          subtitle="Check back later for new offerings"
+          theme={theme}
+        />
+      );
+    }
+
+    return (
+      <View style={styles.serviceGrid}>
+        {services.map((service) => (
+          <Pressable
+            key={service.id}
+            style={styles.serviceCard}
+            onPress={() => {
+              useBookingStore.getState().updateForm({
+                serviceCategory: category,
+                serviceTypeId: service.id,
+              });
+              router.push(`/(client)/book/${category}`);
+            }}
+          >
+            <Card
+              style={[
+                styles.serviceCardInner,
+                {
+                  backgroundColor: theme.colors.surfaceVariant,
+                  borderColor: theme.colors.outline,
+                },
+              ]}
+              mode="contained"
+            >
+              <Card.Content style={styles.serviceContent}>
+                <Text style={styles.serviceIcon}>
+                  {iconMap[service.name] ?? (category === "cleaning" ? "📦" : "🧺")}
+                </Text>
+                <Text
+                  style={[
+                    styles.serviceName,
+                    { color: theme.colors.onSurface },
+                  ]}
+                  variant="titleSmall"
+                >
+                  {service.name}
+                </Text>
+                <Text style={styles.servicePrice} variant="bodySmall">
+                  From GH₵ {service.base_price}{category === "laundry" ? "/item" : ""}
+                </Text>
+              </Card.Content>
+            </Card>
+          </Pressable>
+        ))}
+      </View>
+    );
+  };
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -111,83 +208,12 @@ export default function ClientHomeScreen() {
         >
           🧹 Cleaning Services
         </Text>
-        {servicesLoading ? (
-          <View style={styles.loadingGrid}>
-            {[1, 2].map((i) => (
-              <View key={i} style={styles.serviceCard}>
-                <Card style={[styles.serviceCardInner, { backgroundColor: theme.colors.surfaceVariant }]} mode="contained">
-                  <Card.Content style={styles.serviceContent}>
-                    <View style={[styles.serviceIcon, { backgroundColor: theme.colors.surfaceVariant }]} />
-                    <View style={[styles.skeleton, styles.skeletonText]} />
-                    <View style={[styles.skeleton, styles.skeletonPrice]} />
-                  </Card.Content>
-                </Card>
-              </View>
-            ))}
-          </View>
-        ) : servicesError ? (
-          <EmptyState
-            icon="⚠️"
-            title="Failed to load services"
-            subtitle={servicesError}
-            theme={theme}
-          />
-        ) : cleaningServices.length === 0 ? (
-          <EmptyState
-            icon="🧹"
-            title="No cleaning services available"
-            subtitle="Check back later for new offerings"
-            theme={theme}
-          />
-        ) : (
-          <View style={styles.serviceGrid}>
-            {cleaningServices.map((service) => (
-              <Pressable
-                key={service.id}
-                style={styles.serviceCard}
-                onPress={() => {
-                  useBookingStore.getState().updateForm({
-                    serviceCategory: "cleaning",
-                    serviceTypeId: service.id,
-                  });
-                  router.push("/(client)/book/cleaning");
-                }}
-              >
-                <Card
-                  style={[
-                    styles.serviceCardInner,
-                    {
-                      backgroundColor: theme.colors.surfaceVariant,
-                      borderColor: theme.colors.outline,
-                    },
-                  ]}
-                  mode="contained"
-                >
-                  <Card.Content style={styles.serviceContent}>
-                    <Text style={styles.serviceIcon}>
-                      {service.name.includes("Express")
-                        ? "⚡"
-                        : service.name.includes("Deep")
-                          ? "🔥"
-                          : "📦"}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.serviceName,
-                        { color: theme.colors.onSurface },
-                      ]}
-                      variant="titleSmall"
-                    >
-                      {service.name}
-                    </Text>
-                    <Text style={styles.servicePrice} variant="bodySmall">
-                      From GH₵ {service.base_price}
-                    </Text>
-                  </Card.Content>
-                </Card>
-              </Pressable>
-            ))}
-          </View>
+        {renderServiceSection(
+          "Cleaning Services",
+          "🧹",
+          cleaningServices,
+          "cleaning",
+          { Express: "⚡", Deep: "🔥", "Move-In": "📦" }
         )}
       </View>
 
@@ -199,79 +225,12 @@ export default function ClientHomeScreen() {
         >
           👕 Laundry Services
         </Text>
-        {servicesLoading ? (
-          <View style={styles.loadingGrid}>
-            {[1, 2, 3].map((i) => (
-              <View key={i} style={styles.serviceCard}>
-                <Card style={[styles.serviceCardInner, { backgroundColor: theme.colors.surfaceVariant }]} mode="contained">
-                  <Card.Content style={styles.serviceContent}>
-                    <View style={[styles.serviceIcon, { backgroundColor: theme.colors.surfaceVariant }]} />
-                    <View style={[styles.skeleton, styles.skeletonText]} />
-                    <View style={[styles.skeleton, styles.skeletonPrice]} />
-                  </Card.Content>
-                </Card>
-              </View>
-            ))}
-          </View>
-        ) : servicesError ? (
-          <EmptyState
-            icon="⚠️"
-            title="Failed to load services"
-            subtitle={servicesError}
-            theme={theme}
-          />
-        ) : laundryServices.length === 0 ? (
-          <EmptyState
-            icon="👕"
-            title="No laundry services available"
-            subtitle="Check back later for new offerings"
-            theme={theme}
-          />
-        ) : (
-          <View style={styles.serviceGrid}>
-            {laundryServices.map((service) => (
-              <Pressable
-                key={service.id}
-                style={styles.serviceCard}
-                onPress={() => {
-                  useBookingStore.getState().updateForm({
-                    serviceCategory: "laundry",
-                    serviceTypeId: service.id,
-                  });
-                  router.push("/(client)/book/laundry");
-                }}
-              >
-                <Card
-                  style={[
-                    styles.serviceCardInner,
-                    {
-                      backgroundColor: theme.colors.surfaceVariant,
-                      borderColor: theme.colors.outline,
-                    },
-                  ]}
-                  mode="contained"
-                >
-                  <Card.Content style={styles.serviceContent}>
-                    <Text style={styles.serviceIcon}>
-                      {service.name.includes("Iron") ? "🔥" : "🧺"}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.serviceName,
-                        { color: theme.colors.onSurface },
-                      ]}
-                      variant="titleSmall"
-                    >
-                      {service.name}
-                    </Text>
-                    <Text style={styles.servicePrice} variant="bodySmall">
-                      From GH₵ {service.base_price}/item
-                    </Text>
-                  </Card.Content>
-                </Card>
-              </Pressable>
-            ))}
-          </View>
+        {renderServiceSection(
+          "Laundry Services",
+          "👕",
+          laundryServices,
+          "laundry",
+          { Iron: "🔥", Wash: "🧺" }
         )}
       </View>
 

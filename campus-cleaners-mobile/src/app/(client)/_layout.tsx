@@ -3,6 +3,7 @@ import { Tabs } from "expo-router";
 import { Stack } from "expo-router";
 import { useTheme } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable } from "react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import Sidebar from "@/components/Sidebar";
 
@@ -17,13 +18,18 @@ export default function ClientLayout() {
         headerTintColor: theme.colors.onSurface,
         headerTitleStyle: { fontWeight: "600" },
         headerLeft: () => (
-          <MaterialCommunityIcons
-            name="menu"
-            size={28}
-            color={theme.colors.onSurface}
-            style={{ marginLeft: 12 }}
+          <Pressable
             onPress={() => setSidebarOpen(true)}
-          />
+            style={{ marginLeft: 12, padding: 8 }}
+            accessibilityLabel="Open menu"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialCommunityIcons
+              name="menu"
+              size={28}
+              color={theme.colors.onSurface}
+            />
+          </Pressable>
         ),
       }}
     >

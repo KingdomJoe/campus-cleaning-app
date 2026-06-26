@@ -1,6 +1,6 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import { Text, useTheme } from "react-native-paper";
+import { Text, Button, useTheme } from "react-native-paper";
 import { spacing } from "@/lib/theme";
 
 interface EmptyStateProps {
@@ -8,6 +8,8 @@ interface EmptyStateProps {
   title: string;
   subtitle?: string;
   theme?: any;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 export default function EmptyState({
@@ -15,6 +17,8 @@ export default function EmptyState({
   title,
   subtitle,
   theme,
+  actionLabel,
+  onAction,
 }: EmptyStateProps) {
   const defaultTheme = useTheme();
   const appTheme = theme ?? defaultTheme;
@@ -40,6 +44,18 @@ export default function EmptyState({
           {subtitle}
         </Text>
       )}
+      {actionLabel && onAction && (
+        <Button
+          mode="outlined"
+          onPress={onAction}
+          style={styles.actionBtn}
+          contentStyle={styles.actionBtnContent}
+          labelStyle={styles.actionBtnLabel}
+          icon="refresh"
+        >
+          {actionLabel}
+        </Button>
+      )}
     </View>
   );
 }
@@ -61,5 +77,17 @@ const styles = StyleSheet.create({
   subtitle: {
     textAlign: "center",
     marginTop: spacing.sm,
+  },
+  actionBtn: {
+    marginTop: spacing.lg,
+    borderRadius: 12,
+  },
+  actionBtnContent: {
+    paddingVertical: 8,
+    paddingHorizontal: spacing.lg,
+  },
+  actionBtnLabel: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

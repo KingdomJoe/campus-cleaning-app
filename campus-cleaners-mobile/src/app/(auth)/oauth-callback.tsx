@@ -16,6 +16,8 @@ export default function OAuthCallbackScreen() {
   useEffect(() => {
     async function handleSession() {
       try {
+        console.log('OAuth callback received, URL:', url);
+        
         let accessToken = params.access_token;
         let refreshToken = params.refresh_token;
 
@@ -33,14 +35,24 @@ export default function OAuthCallbackScreen() {
         let activeSession = null;
         const { data: { session } } = await supabase.auth.getSession();
         activeSession = session;
+        console.log('Current session from getSession:', activeSession ? 'exists' : 'none');
         
         if (!activeSession && accessToken && refreshToken) {
+          console.log('Setting session from callback tokens...');
           const { data: { session: newSession }, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
           if (error) throw error;
           activeSession = newSession;
+          console.log('Session set successfully');
+        }
+
+        // If still no session, try to refresh
+        if (!activeSession) {
+          console.log('No session yet, attempting refresh...');
+          const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+          activeSession = refreshedSession;
         }
 
         // Fetch user profile first
@@ -50,9 +62,12 @@ export default function OAuthCallbackScreen() {
         const storedRole = await SecureStore.getItemAsync('registration_role');
         const validRole = (storedRole === 'client' || storedRole === 'cleaner') ? storedRole : null;
 
+        console.log('Profile:', currentProfile?.role, 'Stored role:', storedRole, 'Valid role:', validRole);
+
         if (validRole && activeSession?.user) {
           // If profile doesn't exist or has mismatched role, update/upsert
           if (!currentProfile || currentProfile.role !== validRole) {
+            console.log('Updating profile role to:', validRole);
             const { error: updateError } = await supabase
               .from('profiles')
               .update({ role: validRole })
@@ -72,6 +87,7 @@ export default function OAuthCallbackScreen() {
 
         // Redirect directly to app screen based on role (bypass index.tsx routing race condition)
         const finalRole = validRole || currentProfile?.role;
+        console.log('Final role for redirect:', finalRole);
         if (finalRole === 'cleaner') {
           router.replace('/(cleaner)/jobs');
         } else {

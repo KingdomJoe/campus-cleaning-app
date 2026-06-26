@@ -16,7 +16,10 @@ export default function IndexScreen() {
     if (!isInitialized || isLoading) return;
 
     // If a deep-link auth callback is in-flight, let auth/callback.tsx handle routing
-    if (url && url.includes("auth/callback")) return;
+    if (url && (url.includes("auth/callback") || url.includes("callback"))) {
+      console.log('IndexScreen: Auth callback in progress, skipping redirect');
+      return;
+    }
 
     if (!session) {
       router.replace("/(auth)/welcome");

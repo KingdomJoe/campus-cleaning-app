@@ -16,7 +16,7 @@ export async function signInWithGoogle(): Promise<boolean> {
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
-        skipBrowserRedirect: true,
+        skipBrowserRedirect: false, // Use default browser redirect for better compatibility
       },
     });
 
@@ -26,6 +26,9 @@ export async function signInWithGoogle(): Promise<boolean> {
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
 
     if (result.type === 'success' && result.url) {
+      console.log('OAuth callback URL:', result.url);
+      
+      // Parse tokens from URL (query params or hash fragment)
       const parsed = Linking.parse(result.url);
       const { access_token, refresh_token } = parsed.queryParams || {};
 
@@ -52,6 +55,12 @@ export async function signInWithGoogle(): Promise<boolean> {
           if (sessionErr) throw sessionErr;
           return true;
         }
+      }
+      
+      // Fallback: try to get session directly (Supabase may have set it via deep link)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        return true;
       }
     }
   } catch (err) {

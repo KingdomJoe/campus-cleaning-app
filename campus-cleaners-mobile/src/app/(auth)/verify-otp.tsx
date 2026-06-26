@@ -37,6 +37,7 @@ export default function VerifyOTPScreen() {
   const { session, role, isLoading: isAuthLoading } = useAuthStore();
   const insets = useSafeAreaInsets();
   const isRedirectingRef = useRef(false);
+  const url = Linking.useURL();
 
   // Pulse animation for the email icon — useState lazy initializer is React Compiler-safe
   const [pulseAnim] = useState(() => new Animated.Value(1));
@@ -64,6 +65,12 @@ export default function VerifyOTPScreen() {
   // Session detection & Auto-redirect Hook
   useEffect(() => {
     const handleRedirect = async () => {
+      // Skip redirect if OAuth callback is in progress
+      if (url && (url.includes("auth/callback") || url.includes("callback"))) {
+        console.log('VerifyOTP: Auth callback in progress, skipping redirect');
+        return;
+      }
+      
       if (session && !isAuthLoading && !isRedirectingRef.current) {
         isRedirectingRef.current = true;
         setIsLoading(true);
