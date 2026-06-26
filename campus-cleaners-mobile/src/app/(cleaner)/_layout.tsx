@@ -1,7 +1,7 @@
-import { Tabs } from 'expo-router';
-import { useTheme } from 'react-native-paper';
-import { colors } from '@/lib/theme';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { Tabs } from "expo-router";
+import { useTheme } from "react-native-paper";
+
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 
 export default function CleanerLayout() {
   const theme = useTheme();
@@ -11,7 +11,7 @@ export default function CleanerLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.onSurface,
-        headerTitleStyle: { fontWeight: '600' },
+        headerTitleStyle: { fontWeight: "600" },
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.outline,
@@ -22,23 +22,27 @@ export default function CleanerLayout() {
         },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
     >
       <Tabs.Screen
         name="jobs"
         options={{
-          title: 'Jobs',
+          title: "Jobs",
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="briefcase" size={size} color={color} />
+            <MaterialCommunityIcons
+              name="briefcase"
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
-          title: 'Messages',
+          title: "Messages",
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="chat" size={size} color={color} />
           ),
@@ -47,7 +51,7 @@ export default function CleanerLayout() {
       <Tabs.Screen
         name="earnings"
         options={{
-          title: 'Earnings',
+          title: "Earnings",
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="cash" size={size} color={color} />
           ),
@@ -56,7 +60,7 @@ export default function CleanerLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: "Profile",
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="account" size={size} color={color} />
           ),
@@ -66,7 +70,7 @@ export default function CleanerLayout() {
         name="settings/location"
         options={{
           href: null,
-          title: 'Location Settings',
+          title: "Location Settings",
         }}
       />
     </Tabs>

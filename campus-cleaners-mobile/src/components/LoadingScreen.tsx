@@ -1,18 +1,18 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { ActivityIndicator, Text } from 'react-native-paper';
-import { colors } from '@/lib/theme';
+import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 
 interface LoadingScreenProps {
   message?: string;
 }
 
 export default function LoadingScreen({ message }: LoadingScreenProps) {
+  const theme = useTheme();
   return (
-    <View style={styles.container}>
-      <ActivityIndicator animating size="large" color={colors.primary} />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ActivityIndicator animating size="large" color={theme.colors.primary} />
       {message && (
-        <Text style={styles.message} variant="bodyMedium">
+        <Text style={[styles.message, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">
           {message}
         </Text>
       )}
@@ -25,10 +25,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
   },
   message: {
     marginTop: 16,
-    color: colors.onSurfaceVariant,
   },
 });

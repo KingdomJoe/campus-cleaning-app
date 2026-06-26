@@ -1,23 +1,42 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Text } from 'react-native-paper';
-import { colors, spacing } from '@/lib/theme';
+import React from "react";
+import { View, StyleSheet } from "react-native";
+import { Text, useTheme } from "react-native-paper";
+import { spacing } from "@/lib/theme";
 
 interface EmptyStateProps {
   icon?: string;
   title: string;
   subtitle?: string;
+  theme?: any;
 }
 
-export default function EmptyState({ icon = '📭', title, subtitle }: EmptyStateProps) {
+export default function EmptyState({
+  icon = "📭",
+  title,
+  subtitle,
+  theme,
+}: EmptyStateProps) {
+  const defaultTheme = useTheme();
+  const appTheme = theme ?? defaultTheme;
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        { paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl },
+      ]}
+    >
       <Text style={styles.icon}>{icon}</Text>
-      <Text style={styles.title} variant="titleMedium">
+      <Text
+        style={[styles.title, { color: appTheme.colors.onSurface }]}
+        variant="titleMedium"
+      >
         {title}
       </Text>
       {subtitle && (
-        <Text style={styles.subtitle} variant="bodyMedium">
+        <Text
+          style={[styles.subtitle, { color: appTheme.colors.onSurfaceVariant }]}
+          variant="bodyMedium"
+        >
           {subtitle}
         </Text>
       )}
@@ -28,23 +47,19 @@ export default function EmptyState({ icon = '📭', title, subtitle }: EmptyStat
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xxl,
+    justifyContent: "center",
+    alignItems: "center",
   },
   icon: {
     fontSize: 56,
     marginBottom: spacing.md,
   },
   title: {
-    color: colors.onSurface,
-    textAlign: 'center',
-    fontWeight: '600',
+    textAlign: "center",
+    fontWeight: "600",
   },
   subtitle: {
-    color: colors.onSurfaceVariant,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: spacing.sm,
   },
 });

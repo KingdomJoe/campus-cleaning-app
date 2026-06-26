@@ -1,36 +1,52 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { Text, TextInput, Button, SegmentedButtons, useTheme } from 'react-native-paper';
-import { router } from 'expo-router';
-import * as Linking from 'expo-linking';
-import * as SecureStore from 'expo-secure-store';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
-import { signInWithGoogle } from '@/lib/auth/google';
-import { colors, spacing } from '@/lib/theme';
-import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
-
-import { useEffect } from 'react';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import {
+  Text,
+  TextInput,
+  Button,
+  SegmentedButtons,
+  useTheme,
+} from "react-native-paper";
+import { router } from "expo-router";
+import * as Linking from "expo-linking";
+import * as SecureStore from "expo-secure-store";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/authStore";
+import { signInWithGoogle } from "@/lib/auth/google";
+import { colors, spacing } from "@/lib/theme";
+import PasswordStrengthIndicator from "@/components/PasswordStrengthIndicator";
 
 export default function RegisterClientScreen() {
+  "use no memo"; // Opt out: form state sync from OAuth profile needs setState-in-effect
   const theme = useTheme();
   const { session, profile, fetchProfile } = useAuthStore();
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isPasswordValid, setIsPasswordValid] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState<'email_pass' | 'email_otp'>('email_pass');
+  const [verificationMethod, setVerificationMethod] = useState<
+    "email_pass" | "email_otp"
+  >("email_pass");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'client' | 'cleaner'>('client');
+  const [error, setError] = useState("");
+  const [selectedRole, setSelectedRole] = useState<"client" | "cleaner">(
+    "client",
+  );
   const insets = useSafeAreaInsets();
 
   // Prefill details if Google OAuth has established a session
   useEffect(() => {
     if (session && profile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (profile.full_name) setFullName(profile.full_name);
       if (profile.email) setEmail(profile.email);
       if (profile.phone) setPhone(profile.phone);
@@ -39,22 +55,26 @@ export default function RegisterClientScreen() {
 
   const handleRegister = async () => {
     if (!fullName.trim() || !phone.trim() || !email.trim()) {
-      setError('Please fill in all required fields');
+      setError("Please fill in all required fields");
       return;
     }
 
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
       // Clean phone input (remove spaces, parentheses, etc.)
-      const cleaned = phone.replace(/[^\d+]/g, '');
-      const formattedPhone = cleaned.startsWith('+') ? cleaned : `+233${cleaned.replace(/^0/, '')}`;
+      const cleaned = phone.replace(/[^\d+]/g, "");
+      const formattedPhone = cleaned.startsWith("+")
+        ? cleaned
+        : `+233${cleaned.replace(/^0/, "")}`;
 
       // Validate Ghana phone number format (checking +233 followed by exactly 9 digits)
       const ghanaPhoneRegex = /^\+233\d{9}$/;
       if (!ghanaPhoneRegex.test(formattedPhone)) {
-        setError('Please enter a valid Ghana mobile number (e.g., 024 123 4567 or 055 123 4567)');
+        setError(
+          "Please enter a valid Ghana mobile number (e.g., 024 123 4567 or 055 123 4567)",
+        );
         setIsLoading(false);
         return;
       }
@@ -62,41 +82,41 @@ export default function RegisterClientScreen() {
       if (session) {
         // Active Google OAuth session: just update the profiles database row directly
         const user = useAuthStore.getState().user;
-        if (!user) throw new Error('No active user session');
+        if (!user) throw new Error("No active user session");
 
         const { error: updateError } = await supabase
-          .from('profiles')
+          .from("profiles")
           .update({
             full_name: fullName.trim(),
             phone: formattedPhone,
             role: selectedRole,
           })
-          .eq('id', user.id);
+          .eq("id", user.id);
 
         if (updateError) throw updateError;
 
-        if (selectedRole === 'cleaner') {
+        if (selectedRole === "cleaner") {
           const { error: profileError } = await supabase
-            .from('cleaner_profiles')
+            .from("cleaner_profiles")
             .upsert({ user_id: user.id });
           if (profileError) throw profileError;
         }
 
         await fetchProfile();
-        
-        if (selectedRole === 'cleaner') {
-          router.replace('/(cleaner)/jobs');
+
+        if (selectedRole === "cleaner") {
+          router.replace("/(cleaner)/jobs");
         } else {
-          router.replace('/(client)/home');
+          router.replace("/(client)/home");
         }
       } else {
         // Normal signup with OTP
         let signUpResult;
-        let usedMethod: 'email' = 'email';
-        let verifyType: 'email' | 'signup' = 'email';
+        let usedMethod: "email" = "email";
+        let verifyType: "email" | "signup" = "email";
 
-        if (verificationMethod === 'email_otp') {
-          verifyType = 'email';
+        if (verificationMethod === "email_otp") {
+          verifyType = "email";
           signUpResult = await supabase.auth.signInWithOtp({
             email: email.trim(),
             options: {
@@ -105,22 +125,24 @@ export default function RegisterClientScreen() {
                 full_name: fullName.trim(),
                 phone: formattedPhone,
                 email: email.trim(),
-                role: 'client',
+                role: "client",
               },
-              emailRedirectTo: Linking.createURL('auth/callback'),
+              emailRedirectTo: Linking.createURL("auth/callback"),
             },
           });
           if (signUpResult.error) throw signUpResult.error;
         } else {
           // email_pass
-          verifyType = 'signup';
+          verifyType = "signup";
           if (!password) {
-            setError('Please enter a password');
+            setError("Please enter a password");
             setIsLoading(false);
             return;
           }
           if (!isPasswordValid) {
-            setError('Please make sure your password satisfies all safety criteria');
+            setError(
+              "Please make sure your password satisfies all safety criteria",
+            );
             setIsLoading(false);
             return;
           }
@@ -128,12 +150,12 @@ export default function RegisterClientScreen() {
             email: email.trim(),
             password: password,
             options: {
-              emailRedirectTo: Linking.createURL('auth/callback'),
+              emailRedirectTo: Linking.createURL("auth/callback"),
               data: {
                 full_name: fullName.trim(),
                 phone: formattedPhone,
                 email: email.trim(),
-                role: 'client',
+                role: "client",
               },
             },
           });
@@ -142,7 +164,7 @@ export default function RegisterClientScreen() {
 
         // Navigate to OTP verification
         router.push({
-          pathname: '/(auth)/verify-otp',
+          pathname: "/(auth)/verify-otp",
           params: {
             method: usedMethod,
             identifier: email.trim(),
@@ -151,7 +173,8 @@ export default function RegisterClientScreen() {
         });
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Registration failed';
+      const message =
+        err instanceof Error ? err.message : "Registration failed";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -159,17 +182,18 @@ export default function RegisterClientScreen() {
   };
 
   const handleGoogleSignIn = async () => {
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
-      await SecureStore.setItemAsync('registration_role', 'client');
+      await SecureStore.setItemAsync("registration_role", "client");
       const success = await signInWithGoogle();
       if (success) {
         await fetchProfile();
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Google sign-in failed';
+      const message =
+        err instanceof Error ? err.message : "Google sign-in failed";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -178,7 +202,7 @@ export default function RegisterClientScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <ScrollView
@@ -187,7 +211,7 @@ export default function RegisterClientScreen() {
           {
             paddingTop: Math.max(insets.top, 24) + 24,
             paddingBottom: Math.max(insets.bottom, 24) + 16,
-          }
+          },
         ]}
         keyboardShouldPersistTaps="handled"
       >
@@ -215,11 +239,16 @@ export default function RegisterClientScreen() {
           </>
         )}
 
-        <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
-          {session ? 'Complete Your Profile' : 'Create Client Account'}
+        <Text
+          style={[styles.title, { color: theme.colors.onBackground }]}
+          variant="headlineMedium"
+        >
+          {session ? "Complete Your Profile" : "Create Client Account"}
         </Text>
         <Text style={styles.subtitle} variant="bodyMedium">
-          {session ? 'Provide your phone number to complete setup' : 'Book cleaning and laundry services'}
+          {session
+            ? "Provide your phone number to complete setup"
+            : "Book cleaning and laundry services"}
         </Text>
 
         <View style={styles.form}>
@@ -275,18 +304,22 @@ export default function RegisterClientScreen() {
               </Text>
               <SegmentedButtons
                 value={selectedRole}
-                onValueChange={(v) => setSelectedRole(v as 'client' | 'cleaner')}
+                onValueChange={(v) =>
+                  setSelectedRole(v as "client" | "cleaner")
+                }
                 buttons={[
-                  { value: 'client', label: '🏠 Client (I need cleaning)' },
-                  { value: 'cleaner', label: '🧹 Cleaner (I\'m a cleaner)' },
+                  { value: "client", label: "🏠 Client (I need cleaning)" },
+                  { value: "cleaner", label: "🧹 Cleaner (I'm a cleaner)" },
                 ]}
                 style={styles.segment}
-                theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
+                theme={{
+                  colors: { secondaryContainer: colors.primaryContainer },
+                }}
               />
             </>
           )}
 
-          {!session && verificationMethod === 'email_pass' && (
+          {!session && verificationMethod === "email_pass" && (
             <View style={{ marginBottom: spacing.md }}>
               <TextInput
                 label="Password *"
@@ -297,7 +330,7 @@ export default function RegisterClientScreen() {
                 left={<TextInput.Icon icon="lock-outline" />}
                 right={
                   <TextInput.Icon
-                    icon={showPassword ? 'eye-off' : 'eye'}
+                    icon={showPassword ? "eye-off" : "eye"}
                     onPress={() => setShowPassword(!showPassword)}
                   />
                 }
@@ -323,13 +356,17 @@ export default function RegisterClientScreen() {
               </Text>
               <SegmentedButtons
                 value={verificationMethod}
-                onValueChange={(v) => setVerificationMethod(v as 'email_pass' | 'email_otp')}
+                onValueChange={(v) =>
+                  setVerificationMethod(v as "email_pass" | "email_otp")
+                }
                 buttons={[
-                  { value: 'email_pass', label: '📧 Email & Password' },
-                  { value: 'email_otp', label: '✉️ Email OTP' },
+                  { value: "email_pass", label: "📧 Email & Password" },
+                  { value: "email_otp", label: "✉️ Email OTP" },
                 ]}
                 style={styles.segment}
-                theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
+                theme={{
+                  colors: { secondaryContainer: colors.primaryContainer },
+                }}
               />
             </>
           )}
@@ -351,7 +388,7 @@ export default function RegisterClientScreen() {
           labelStyle={styles.btnLabel}
           buttonColor={colors.primary}
         >
-          {session ? 'Complete Setup' : 'Register & Verify'}
+          {session ? "Complete Setup" : "Register & Verify"}
         </Button>
 
         <Button
@@ -377,7 +414,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.white,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   subtitle: {
     color: colors.onSurfaceVariant,
@@ -392,8 +429,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceVariant,
   },
   divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: spacing.lg,
     gap: spacing.md,
   },
@@ -401,7 +438,7 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
     fontSize: 12,
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
   },
   googleBtn: {
     borderColor: colors.outline,
@@ -424,11 +461,11 @@ const styles = StyleSheet.create({
   },
   btnLabel: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   sectionLabel: {
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: spacing.sm,
   },
   segment: {

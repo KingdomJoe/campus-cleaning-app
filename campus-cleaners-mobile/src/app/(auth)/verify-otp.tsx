@@ -1,39 +1,48 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TextInput as RNTextInput, KeyboardAvoidingView, Platform, Alert, ScrollView, Animated } from 'react-native';
-import { Text, Button, ActivityIndicator, useTheme } from 'react-native-paper';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Linking from 'expo-linking';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
-import { uploadAvatar, uploadDocument } from '@/lib/api/uploads';
-import { colors, spacing } from '@/lib/theme';
+import React, { useState, useRef, useEffect } from "react";
+import {
+  View,
+  StyleSheet,
+  TextInput as RNTextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+  ScrollView,
+  Animated,
+} from "react-native";
+import { Text, Button, ActivityIndicator, useTheme } from "react-native-paper";
+import { router, useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Linking from "expo-linking";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/authStore";
+import { uploadAvatar, uploadDocument } from "@/lib/api/uploads";
+import { colors, spacing } from "@/lib/theme";
 
 const OTP_LENGTH = 6;
 
 export default function VerifyOTPScreen() {
   const theme = useTheme();
   const { method, identifier, type } = useLocalSearchParams<{
-    method: 'phone' | 'email';
+    method: "phone" | "email";
     identifier: string;
-    type?: 'email' | 'signup';
+    type?: "email" | "signup";
   }>();
 
-  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const inputRefs = useRef<(RNTextInput | null)[]>([]);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
   const { session, role, isLoading: isAuthLoading } = useAuthStore();
   const insets = useSafeAreaInsets();
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const isRedirectingRef = useRef(false);
 
-  // Pulse animation for the email icon
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  // Pulse animation for the email icon — useState lazy initializer is React Compiler-safe
+  const [pulseAnim] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
-    if (method === 'email') {
+    if (method === "email") {
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -46,16 +55,17 @@ export default function VerifyOTPScreen() {
             duration: 1200,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [method]);
 
   // Session detection & Auto-redirect Hook
   useEffect(() => {
     const handleRedirect = async () => {
-      if (session && !isAuthLoading && !isRedirecting) {
-        setIsRedirecting(true);
+      if (session && !isAuthLoading && !isRedirectingRef.current) {
+        isRedirectingRef.current = true;
         setIsLoading(true);
         try {
           const user = useAuthStore.getState().user;
@@ -63,36 +73,41 @@ export default function VerifyOTPScreen() {
 
           if (user) {
             try {
-              const { identifyUser, trackEvent } = await import('@/lib/analytics');
+              const { identifyUser, trackEvent } =
+                await import("@/lib/analytics");
               identifyUser(user.id, user.email, user.user_metadata?.full_name);
-              trackEvent('login', { role: userRole });
+              trackEvent("login", { role: userRole });
             } catch (err) {
-              console.error('Analytics tracking failed:', err);
+              console.error("Analytics tracking failed:", err);
             }
           }
 
           if (!userRole) {
             // No role specified yet, send them to register roles
-            router.replace('/(auth)/register');
+            router.replace("/(auth)/register");
             return;
           }
 
-          if (userRole === 'cleaner') {
+          if (userRole === "cleaner") {
             const meta = user?.user_metadata || {};
             // Sync registration details from user metadata into public.cleaner_profiles
             await supabase
-              .from('cleaner_profiles')
+              .from("cleaner_profiles")
               .update({
-                bio: meta.bio || '',
+                bio: meta.bio || "",
                 skills: meta.skills || [],
-                mobile_money_number: meta.mobile_money_number || '',
-                guarantor_name: meta.guarantor_name || '',
-                guarantor_phone: meta.guarantor_phone || '',
+                mobile_money_number: meta.mobile_money_number || "",
+                guarantor_name: meta.guarantor_name || "",
+                guarantor_phone: meta.guarantor_phone || "",
               })
-              .eq('user_id', user!.id);
+              .eq("user_id", user!.id);
 
             // Upload pending photo and documents
-            const { pendingDocuments, pendingProfilePhoto, clearPendingUploads } = useAuthStore.getState();
+            const {
+              pendingDocuments,
+              pendingProfilePhoto,
+              clearPendingUploads,
+            } = useAuthStore.getState();
             if (pendingProfilePhoto) {
               await uploadAvatar(user!.id, pendingProfilePhoto);
             }
@@ -104,19 +119,21 @@ export default function VerifyOTPScreen() {
               }
             }
             clearPendingUploads();
-            router.replace('/(cleaner)/jobs');
+            router.replace("/(cleaner)/jobs");
           } else {
-            router.replace('/(client)/home');
+            router.replace("/(client)/home");
           }
         } catch (err: unknown) {
-          console.error('Error in post-verification sync:', err);
+          console.error("Error in post-verification sync:", err);
           Alert.alert(
-            'Setup Incomplete',
-            'Successfully logged in, but we had trouble saving your credentials or photos. Please verify your connection.'
+            "Setup Incomplete",
+            "Successfully logged in, but we had trouble saving your credentials or photos. Please verify your connection.",
           );
           // Fallback redirect
           const currentRole = useAuthStore.getState().role;
-          router.replace(currentRole === 'cleaner' ? '/(cleaner)/jobs' : '/(client)/home');
+          router.replace(
+            currentRole === "cleaner" ? "/(cleaner)/jobs" : "/(client)/home",
+          );
         } finally {
           setIsLoading(false);
         }
@@ -137,34 +154,37 @@ export default function VerifyOTPScreen() {
     }
 
     // Auto-submit when all digits entered
-    if (newOtp.every((d) => d !== '') && newOtp.join('').length === OTP_LENGTH) {
-      verifyOTP(newOtp.join(''));
+    if (
+      newOtp.every((d) => d !== "") &&
+      newOtp.join("").length === OTP_LENGTH
+    ) {
+      verifyOTP(newOtp.join(""));
     }
   };
 
   const handleKeyPress = (key: string, index: number) => {
-    if (key === 'Backspace' && !otp[index] && index > 0) {
+    if (key === "Backspace" && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
   const verifyOTP = async (code: string) => {
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
       let result;
-      if (method === 'phone') {
+      if (method === "phone") {
         result = await supabase.auth.verifyOtp({
           phone: identifier!,
           token: code,
-          type: 'sms',
+          type: "sms",
         });
       } else {
         result = await supabase.auth.verifyOtp({
           email: identifier!,
           token: code,
-          type: type || 'email',
+          type: type || "email",
         });
       }
 
@@ -173,9 +193,9 @@ export default function VerifyOTPScreen() {
       // Update local profile which will trigger the auto-redirect hook
       await fetchProfile();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Invalid OTP code';
+      const message = err instanceof Error ? err.message : "Invalid OTP code";
       setError(message);
-      setOtp(Array(OTP_LENGTH).fill(''));
+      setOtp(Array(OTP_LENGTH).fill(""));
       inputRefs.current[0]?.focus();
     } finally {
       setIsLoading(false);
@@ -183,42 +203,49 @@ export default function VerifyOTPScreen() {
   };
 
   const handleResend = async () => {
-    setError('');
+    setError("");
     try {
-      if (method === 'phone') {
-        const { error: resendErr } = await supabase.auth.signInWithOtp({ phone: identifier! });
+      if (method === "phone") {
+        const { error: resendErr } = await supabase.auth.signInWithOtp({
+          phone: identifier!,
+        });
         if (resendErr) throw resendErr;
-        Alert.alert('Code Resent', 'A new verification code has been sent to your phone.');
+        Alert.alert(
+          "Code Resent",
+          "A new verification code has been sent to your phone.",
+        );
       } else {
-        if (type === 'signup') {
+        if (type === "signup") {
           const { error: resendErr } = await supabase.auth.resend({
-            type: 'signup',
+            type: "signup",
             email: identifier!,
             options: {
-              emailRedirectTo: Linking.createURL('auth/callback'),
-            }
+              emailRedirectTo: Linking.createURL("auth/callback"),
+            },
           });
           if (resendErr) throw resendErr;
-          Alert.alert('Code Resent', 'A new confirmation email has been sent.');
+          Alert.alert("Code Resent", "A new confirmation email has been sent.");
         } else {
           const { error: otpErr } = await supabase.auth.signInWithOtp({
             email: identifier!,
             options: {
-              emailRedirectTo: Linking.createURL('auth/callback'),
-            }
+              emailRedirectTo: Linking.createURL("auth/callback"),
+            },
           });
           if (otpErr) throw otpErr;
-          Alert.alert('Code Resent', 'A new verification email has been sent.');
+          Alert.alert("Code Resent", "A new verification email has been sent.");
         }
       }
     } catch (err: any) {
-      setError(err instanceof Error ? err.message : 'Failed to resend verification');
+      setError(
+        err instanceof Error ? err.message : "Failed to resend verification",
+      );
     }
   };
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <ScrollView
@@ -227,36 +254,82 @@ export default function VerifyOTPScreen() {
           {
             paddingTop: Math.max(insets.top, 24),
             paddingBottom: Math.max(insets.bottom, 24) + 16,
-          }
+          },
         ]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
-          {method === 'email' ? (
+          {method === "email" ? (
             <View style={styles.emailPromptContainer}>
-              <Animated.View style={[styles.iconCircle, { backgroundColor: theme.colors.surfaceVariant, transform: [{ scale: pulseAnim }] }]}>
-                <MaterialCommunityIcons name="email-fast" size={44} color={theme.colors.primary} />
+              <Animated.View
+                style={[
+                  styles.iconCircle,
+                  {
+                    backgroundColor: theme.colors.surfaceVariant,
+                    transform: [{ scale: pulseAnim }],
+                  },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name="email-fast"
+                  size={44}
+                  color={theme.colors.primary}
+                />
               </Animated.View>
 
-              <Text style={[styles.emailTitle, { color: theme.colors.onBackground }]} variant="headlineMedium">
+              <Text
+                style={[
+                  styles.emailTitle,
+                  { color: theme.colors.onBackground },
+                ]}
+                variant="headlineMedium"
+              >
                 Verify Your Account
               </Text>
 
-              <Text style={styles.subtitle} variant="bodyLarge">
-                We've sent a verification link to
+              <Text
+                style={[
+                  styles.subtitle,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+                variant="bodyLarge"
+              >
+                {"We\u2019ve sent a verification link to"}
               </Text>
 
               <Text style={styles.identifier} variant="titleMedium">
                 {identifier}
               </Text>
 
-              <Text style={styles.instructionText} variant="bodyMedium">
-                Please open your email client, locate our email, and click the confirmation button/link to verify your account.
+              <Text
+                style={[
+                  styles.instructionText,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+                variant="bodyMedium"
+              >
+                Please open your email client, locate our email, and click the
+                confirmation button/link to verify your account.
               </Text>
 
-              <View style={styles.statusRow}>
-                <ActivityIndicator size={16} color={theme.colors.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.statusText} variant="bodySmall">
+              <View
+                style={[
+                  styles.statusRow,
+                  { backgroundColor: theme.colors.surfaceVariant },
+                ]}
+              >
+                <ActivityIndicator
+                  size={16}
+                  color={theme.colors.primary}
+                  style={{ marginRight: 8 }}
+                />
+                <Text
+                  style={[
+                    styles.statusText,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                  variant="bodySmall"
+                >
                   Waiting for verification...
                 </Text>
               </View>
@@ -285,10 +358,19 @@ export default function VerifyOTPScreen() {
           ) : (
             // SMS OTP input layout
             <View>
-              <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
+              <Text
+                style={[styles.title, { color: theme.colors.onBackground }]}
+                variant="headlineMedium"
+              >
                 Verify OTP
               </Text>
-              <Text style={styles.subtitle} variant="bodyLarge">
+              <Text
+                style={[
+                  styles.subtitle,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+                variant="bodyLarge"
+              >
                 Enter the {OTP_LENGTH}-digit code sent to
               </Text>
               <Text style={styles.identifier} variant="titleSmall">
@@ -299,11 +381,25 @@ export default function VerifyOTPScreen() {
                 {otp.map((digit, index) => (
                   <RNTextInput
                     key={index}
-                    ref={(ref) => { inputRefs.current[index] = ref; }}
-                    style={[styles.otpInput, digit ? styles.otpFilled : null, { color: theme.colors.onSurface, backgroundColor: theme.colors.surfaceVariant, borderColor: digit ? theme.colors.primary : theme.colors.outline }]}
+                    ref={(ref) => {
+                      inputRefs.current[index] = ref;
+                    }}
+                    style={[
+                      styles.otpInput,
+                      digit ? styles.otpFilled : null,
+                      {
+                        color: theme.colors.onSurface,
+                        backgroundColor: theme.colors.surfaceVariant,
+                        borderColor: digit
+                          ? theme.colors.primary
+                          : theme.colors.outline,
+                      },
+                    ]}
                     value={digit}
                     onChangeText={(text) => handleChange(text.slice(-1), index)}
-                    onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
+                    onKeyPress={({ nativeEvent }) =>
+                      handleKeyPress(nativeEvent.key, index)
+                    }
                     keyboardType="number-pad"
                     maxLength={1}
                     selectTextOnFocus
@@ -319,7 +415,7 @@ export default function VerifyOTPScreen() {
 
               <Button
                 mode="contained"
-                onPress={() => verifyOTP(otp.join(''))}
+                onPress={() => verifyOTP(otp.join(""))}
                 loading={isLoading}
                 disabled={isLoading || otp.some((d) => !d)}
                 style={styles.btn}
@@ -332,10 +428,10 @@ export default function VerifyOTPScreen() {
               <Button
                 mode="text"
                 onPress={handleResend}
-                textColor={colors.onSurfaceVariant}
+                textColor={theme.colors.onSurfaceVariant}
                 style={styles.resendBtn}
               >
-                Didn't receive a code? Resend
+                {"Didn\u2019t receive a code? Resend"}
               </Button>
             </View>
           )}
@@ -355,32 +451,32 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   title: {
     color: colors.white,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   emailTitle: {
     color: colors.white,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
     marginBottom: spacing.xs,
   },
   subtitle: {
     color: colors.onSurfaceVariant,
     marginTop: spacing.sm,
-    textAlign: 'center',
+    textAlign: "center",
   },
   identifier: {
     color: colors.primary,
     marginTop: spacing.xs,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
   },
   otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     gap: 12,
     marginVertical: spacing.xl,
   },
@@ -393,20 +489,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceVariant,
     color: colors.white,
     fontSize: 22,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
   },
   otpFilled: {
     borderColor: colors.primary,
   },
   error: {
     color: colors.error,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: spacing.md,
   },
   btn: {
     borderRadius: 12,
-    width: '100%',
+    width: "100%",
   },
   btnContent: {
     paddingVertical: 6,
@@ -415,7 +511,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   emailPromptContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: spacing.lg,
   },
   iconCircle: {
@@ -423,23 +519,23 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: 44,
     backgroundColor: colors.surfaceVariant,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: spacing.lg,
     borderWidth: 2,
     borderColor: colors.primary,
   },
   instructionText: {
     color: colors.onSurfaceVariant,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: spacing.md,
     marginBottom: spacing.xl,
     lineHeight: 22,
     paddingHorizontal: spacing.md,
   },
   statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.surfaceVariant,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
@@ -448,6 +544,6 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: colors.onSurfaceVariant,
-    fontWeight: '500',
+    fontWeight: "500",
   },
 });
