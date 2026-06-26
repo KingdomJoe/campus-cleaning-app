@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
-import { Card, Text, Avatar } from 'react-native-paper';
+import { Card, Text, Avatar, useTheme } from 'react-native-paper';
 import { format } from 'date-fns';
 import type { Booking } from '@/lib/database.types';
 import StatusBadge from './StatusBadge';
@@ -13,20 +13,21 @@ interface BookingCardProps {
 }
 
 export default function BookingCard({ booking, userRole, onPress }: BookingCardProps) {
+  const theme = useTheme();
   const otherPerson =
     userRole === 'client' ? booking.cleaner : booking.client;
   const serviceName = booking.service_type?.name ?? 'Service';
 
   return (
     <Pressable onPress={onPress}>
-      <Card style={styles.card} mode="contained">
+      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
         <Card.Content style={styles.content}>
           <View style={styles.topRow}>
             <View style={styles.serviceInfo}>
-              <Text style={styles.serviceName} variant="titleSmall">
+              <Text style={[styles.serviceName, { color: theme.colors.onSurface }]} variant="titleSmall">
                 {serviceName}
               </Text>
-              <Text style={styles.location} variant="bodySmall">
+              <Text style={[styles.location, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">
                 📍 {booking.location}
               </Text>
             </View>
@@ -35,10 +36,10 @@ export default function BookingCard({ booking, userRole, onPress }: BookingCardP
 
           <View style={styles.detailsRow}>
             <View style={styles.dateTime}>
-              <Text style={styles.dateText} variant="bodySmall">
+              <Text style={[styles.dateText, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">
                 📅 {booking.scheduled_date ? format(new Date(booking.scheduled_date), 'MMM d, yyyy') : '—'}
               </Text>
-              <Text style={styles.dateText} variant="bodySmall">
+              <Text style={[styles.dateText, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">
                 🕐 {booking.scheduled_time ?? '—'}
               </Text>
             </View>
@@ -48,14 +49,14 @@ export default function BookingCard({ booking, userRole, onPress }: BookingCardP
           </View>
 
           {otherPerson && (
-            <View style={styles.personRow}>
+            <View style={[styles.personRow, { borderTopColor: theme.colors.outline }]}>
               <Avatar.Text
                 size={28}
                 label={otherPerson.full_name?.charAt(0) ?? '?'}
                 style={styles.avatar}
                 color={colors.white}
               />
-              <Text style={styles.personName} variant="bodySmall">
+              <Text style={[styles.personName, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">
                 {userRole === 'client' ? 'Cleaner: ' : 'Client: '}
                 {otherPerson.full_name}
               </Text>
@@ -69,11 +70,9 @@ export default function BookingCard({ booking, userRole, onPress }: BookingCardP
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surfaceVariant,
     marginBottom: spacing.md,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.outline,
   },
   content: {
     gap: spacing.sm,
@@ -88,11 +87,9 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   serviceName: {
-    color: colors.white,
     fontWeight: '700',
   },
   location: {
-    color: colors.onSurfaceVariant,
     marginTop: 2,
   },
   detailsRow: {
@@ -105,7 +102,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   dateText: {
-    color: colors.onSurfaceVariant,
   },
   price: {
     color: colors.primary,
@@ -117,12 +113,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingTop: spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: colors.outline,
   },
   avatar: {
     backgroundColor: colors.primaryDark,
   },
   personName: {
-    color: colors.onSurfaceVariant,
   },
 });

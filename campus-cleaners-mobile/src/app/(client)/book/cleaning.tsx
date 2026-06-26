@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, TextInput, Button, SegmentedButtons, Switch } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { Text, TextInput, Button, SegmentedButtons, Switch, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useBookingStore } from '@/stores/bookingStore';
 import { colors, spacing } from '@/lib/theme';
+import CustomDatePickerModal from '@/components/CustomDatePickerModal';
+import CustomTimeSlotModal from '@/components/CustomTimeSlotModal';
+import SuggestiveNotesModal from '@/components/SuggestiveNotesModal';
 
 const ROOM_TYPES = [
   { value: 'single', label: 'Single Room' },
@@ -19,9 +22,15 @@ const ROOM_SIZES = [
 ];
 
 export default function CleaningBookingScreen() {
+  const theme = useTheme();
   const { form, updateForm } = useBookingStore();
   const [roomType, setRoomType] = useState(form.roomType || 'single');
   const [roomSize, setRoomSize] = useState(form.roomSize || 'small');
+
+  // Modal Visibility States
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showNotesPicker, setShowNotesPicker] = useState(false);
 
   const handleNext = () => {
     if (!form.location || !form.scheduledDate || !form.scheduledTime) {
@@ -34,7 +43,7 @@ export default function CleaningBookingScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.label} variant="labelLarge">Room Type</Text>
@@ -44,10 +53,10 @@ export default function CleaningBookingScreen() {
           buttons={ROOM_TYPES.map((r) => ({
             value: r.value,
             label: r.label,
-            style: styles.segBtn,
+            style: [styles.segBtn, { borderColor: theme.colors.outline }],
           }))}
           style={styles.segment}
-          theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
+          theme={{ colors: { secondaryContainer: theme.colors.primaryContainer } }}
         />
 
         <Text style={styles.label} variant="labelLarge">Room Size</Text>
@@ -57,10 +66,10 @@ export default function CleaningBookingScreen() {
           buttons={ROOM_SIZES.map((r) => ({
             value: r.value,
             label: r.label,
-            style: styles.segBtn,
+            style: [styles.segBtn, { borderColor: theme.colors.outline }],
           }))}
           style={styles.segment}
-          theme={{ colors: { secondaryContainer: colors.primaryContainer } }}
+          theme={{ colors: { secondaryContainer: theme.colors.primaryContainer } }}
         />
 
         <Text style={styles.label} variant="labelLarge">Number of Rooms</Text>
@@ -68,16 +77,18 @@ export default function CleaningBookingScreen() {
           <Button
             mode="outlined"
             onPress={() => updateForm({ roomCount: Math.max(1, form.roomCount - 1) })}
-            textColor={colors.primary}
+            textColor={theme.colors.primary}
+            style={{ borderColor: theme.colors.outline }}
             compact
           >
             −
           </Button>
-          <Text style={styles.counterValue} variant="titleLarge">{form.roomCount}</Text>
+          <Text style={[styles.counterValue, { color: theme.colors.onSurface }]} variant="titleLarge">{form.roomCount}</Text>
           <Button
             mode="outlined"
             onPress={() => updateForm({ roomCount: form.roomCount + 1 })}
-            textColor={colors.primary}
+            textColor={theme.colors.primary}
+            style={{ borderColor: theme.colors.outline }}
             compact
           >
             +
@@ -85,11 +96,11 @@ export default function CleaningBookingScreen() {
         </View>
 
         <View style={styles.switchRow}>
-          <Text style={styles.switchLabel} variant="bodyLarge">Include Bathroom</Text>
+          <Text style={[styles.switchLabel, { color: theme.colors.onSurface }]} variant="bodyLarge">Include Bathroom</Text>
           <Switch
             value={form.bathroomIncluded}
             onValueChange={(v) => updateForm({ bathroomIncluded: v })}
-            color={colors.primary}
+            color={theme.colors.primary}
           />
         </View>
 
@@ -100,55 +111,71 @@ export default function CleaningBookingScreen() {
           placeholder="e.g., Amamoma Hall, Room B204"
           mode="outlined"
           left={<TextInput.Icon icon="map-marker" />}
-          style={styles.input}
-          outlineColor={colors.outline}
-          activeOutlineColor={colors.primary}
-          textColor={colors.onSurface}
-          theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+          style={[styles.input, { backgroundColor: theme.colors.surfaceVariant }]}
+          outlineColor={theme.colors.outline}
+          activeOutlineColor={theme.colors.primary}
+          textColor={theme.colors.onSurface}
+          placeholderTextColor={theme.colors.onSurfaceVariant}
         />
 
-        <TextInput
-          label="Date * (YYYY-MM-DD)"
-          value={form.scheduledDate}
-          onChangeText={(v) => updateForm({ scheduledDate: v })}
-          placeholder="2026-06-25"
-          mode="outlined"
-          left={<TextInput.Icon icon="calendar" />}
-          style={styles.input}
-          outlineColor={colors.outline}
-          activeOutlineColor={colors.primary}
-          textColor={colors.onSurface}
-          theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-        />
+        {/* Calendar Picker Trigger */}
+        <Pressable onPress={() => setShowDatePicker(true)}>
+          <View pointerEvents="none">
+            <TextInput
+              label="Date *"
+              value={form.scheduledDate}
+              placeholder="Tap to select date..."
+              mode="outlined"
+              editable={false}
+              left={<TextInput.Icon icon="calendar" />}
+              style={[styles.input, { backgroundColor: theme.colors.surfaceVariant }]}
+              outlineColor={theme.colors.outline}
+              activeOutlineColor={theme.colors.primary}
+              textColor={theme.colors.onSurface}
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+            />
+          </View>
+        </Pressable>
 
-        <TextInput
-          label="Time * (HH:MM)"
-          value={form.scheduledTime}
-          onChangeText={(v) => updateForm({ scheduledTime: v })}
-          placeholder="14:00"
-          mode="outlined"
-          left={<TextInput.Icon icon="clock-outline" />}
-          style={styles.input}
-          outlineColor={colors.outline}
-          activeOutlineColor={colors.primary}
-          textColor={colors.onSurface}
-          theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-        />
+        {/* Time Slot Picker Trigger */}
+        <Pressable onPress={() => setShowTimePicker(true)}>
+          <View pointerEvents="none">
+            <TextInput
+              label="Time *"
+              value={form.scheduledTime}
+              placeholder="Tap to select time..."
+              mode="outlined"
+              editable={false}
+              left={<TextInput.Icon icon="clock-outline" />}
+              style={[styles.input, { backgroundColor: theme.colors.surfaceVariant }]}
+              outlineColor={theme.colors.outline}
+              activeOutlineColor={theme.colors.primary}
+              textColor={theme.colors.onSurface}
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+            />
+          </View>
+        </Pressable>
 
-        <TextInput
-          label="Additional Notes"
-          value={form.description}
-          onChangeText={(v) => updateForm({ description: v })}
-          placeholder="Any special instructions..."
-          mode="outlined"
-          multiline
-          numberOfLines={3}
-          style={styles.input}
-          outlineColor={colors.outline}
-          activeOutlineColor={colors.primary}
-          textColor={colors.onSurface}
-          theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-        />
+        {/* Suggestive Notes Trigger */}
+        <Pressable onPress={() => setShowNotesPicker(true)}>
+          <View pointerEvents="none">
+            <TextInput
+              label="Additional Notes"
+              value={form.description}
+              placeholder="Tap to select suggestions..."
+              mode="outlined"
+              editable={false}
+              multiline
+              numberOfLines={3}
+              left={<TextInput.Icon icon="note-text-outline" />}
+              style={[styles.input, { backgroundColor: theme.colors.surfaceVariant }]}
+              outlineColor={theme.colors.outline}
+              activeOutlineColor={theme.colors.primary}
+              textColor={theme.colors.onSurface}
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+            />
+          </View>
+        </Pressable>
 
         <Button
           mode="contained"
@@ -156,27 +183,52 @@ export default function CleaningBookingScreen() {
           style={styles.btn}
           contentStyle={styles.btnContent}
           labelStyle={styles.btnLabel}
-          buttonColor={colors.primary}
+          buttonColor={theme.colors.primary}
           disabled={!form.location || !form.scheduledDate || !form.scheduledTime}
         >
           Review Booking →
         </Button>
       </ScrollView>
+
+      {/* Date Picker Modal */}
+      <CustomDatePickerModal
+        visible={showDatePicker}
+        onDismiss={() => setShowDatePicker(false)}
+        selectedDate={form.scheduledDate}
+        onSelectDate={(date) => updateForm({ scheduledDate: date })}
+      />
+
+      {/* Time Picker Modal */}
+      <CustomTimeSlotModal
+        visible={showTimePicker}
+        onDismiss={() => setShowTimePicker(false)}
+        selectedTime={form.scheduledTime}
+        onSelectTime={(time) => updateForm({ scheduledTime: time })}
+      />
+
+      {/* Suggestive Notes Modal */}
+      <SuggestiveNotesModal
+        visible={showNotesPicker}
+        onDismiss={() => setShowNotesPicker(false)}
+        serviceCategory="cleaning"
+        initialNotes={form.description}
+        onApplyNotes={(notes) => updateForm({ description: notes })}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   label: { color: colors.primary, fontWeight: '600' },
   segment: { marginBottom: spacing.xs },
-  segBtn: { borderColor: colors.outline },
+  segBtn: {},
   counterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, justifyContent: 'center' },
-  counterValue: { color: colors.white, fontWeight: '700', minWidth: 40, textAlign: 'center' },
+  counterValue: { fontWeight: '700', minWidth: 40, textAlign: 'center' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm },
-  switchLabel: { color: colors.onSurface },
-  input: { backgroundColor: colors.surfaceVariant },
+  switchLabel: {},
+  input: {},
   btn: { borderRadius: 12, marginTop: spacing.md },
   btnContent: { paddingVertical: 6 },
   btnLabel: { fontSize: 16, fontWeight: '700' },

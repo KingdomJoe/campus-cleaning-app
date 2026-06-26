@@ -104,6 +104,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
+    try {
+      const { resetAnalytics } = await import('@/lib/analytics');
+      resetAnalytics();
+    } catch (err) {
+      console.error('Error resetting analytics:', err);
+    }
     set({
       session: null,
       user: null,

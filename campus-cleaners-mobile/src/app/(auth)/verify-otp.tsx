@@ -61,6 +61,16 @@ export default function VerifyOTPScreen() {
           const user = useAuthStore.getState().user;
           const userRole = useAuthStore.getState().role;
 
+          if (user) {
+            try {
+              const { identifyUser, trackEvent } = await import('@/lib/analytics');
+              identifyUser(user.id, user.email, user.user_metadata?.full_name);
+              trackEvent('login', { role: userRole });
+            } catch (err) {
+              console.error('Analytics tracking failed:', err);
+            }
+          }
+
           if (!userRole) {
             // No role specified yet, send them to register roles
             router.replace('/(auth)/register');

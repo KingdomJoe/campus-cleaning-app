@@ -80,12 +80,13 @@ export default function ProfileScreen() {
 }
 
 function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  const theme = useTheme();
   return (
     <View style={infoStyles.row}>
       <Text style={infoStyles.icon}>{icon}</Text>
       <View>
-        <Text style={infoStyles.label} variant="labelSmall">{label}</Text>
-        <Text style={infoStyles.value} variant="bodyMedium">{value}</Text>
+        <Text style={[infoStyles.label, { color: theme.colors.onSurfaceVariant }]} variant="labelSmall">{label}</Text>
+        <Text style={[infoStyles.value, { color: theme.colors.onSurface }]} variant="bodyMedium">{value}</Text>
       </View>
     </View>
   );
@@ -94,18 +95,18 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 const infoStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   icon: { fontSize: 20, width: 28, textAlign: 'center' },
-  label: { color: colors.onSurfaceVariant },
-  value: { color: colors.onSurface, fontWeight: '500' },
+  label: { fontSize: 11 },
+  value: { fontWeight: '500' },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   header: { alignItems: 'center', paddingVertical: spacing.xl },
   avatar: { backgroundColor: colors.primaryDark, marginBottom: spacing.md },
-  name: { color: colors.onBackground, fontWeight: '700' },
+  name: { fontWeight: '700' },
   role: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
-  card: { backgroundColor: colors.surfaceVariant, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.outline, marginTop: spacing.lg },
-  divider: { backgroundColor: colors.outline },
-  logoutBtn: { borderColor: colors.error, borderRadius: 12, marginTop: spacing.xl },
+  card: { borderRadius: borderRadius.lg, borderWidth: 1, marginTop: spacing.lg },
+  divider: {},
+  logoutBtn: { borderRadius: 12, marginTop: spacing.xl },
 });

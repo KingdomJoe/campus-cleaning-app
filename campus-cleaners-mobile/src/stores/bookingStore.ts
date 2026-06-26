@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Booking, BookingStatus, LaundryItem } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
+import { fetchBookingPayment, refundPayment } from '@/lib/api/payments';
 
 interface BookingFormState {
   serviceCategory: 'cleaning' | 'laundry' | null;
@@ -44,6 +45,11 @@ interface BookingState {
   createBooking: (clientId: string, totalPrice: number) => Promise<Booking | null>;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => Promise<boolean>;
   cancelBooking: (bookingId: string, reason: string) => Promise<boolean>;
+
+  // Actions — cleaner applications
+  applyForJob: (bookingId: string, cleanerId: string) => Promise<boolean>;
+  fetchBookingApplications: (bookingId: string) => Promise<any[]>;
+  hireCleaner: (bookingId: string, appId: string, cleanerId: string) => Promise<boolean>;
 }
 
 const initialForm: BookingFormState = {
@@ -219,6 +225,20 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .single();
 
       if (error) throw error;
+
+      try {
+        const { trackEvent } = await import('@/lib/analytics');
+        trackEvent('booking_created', {
+          bookingId: data.id,
+          serviceCategory: form.serviceCategory,
+          totalPrice: totalPrice,
+          roomCount: form.roomCount,
+          bathroomIncluded: form.bathroomIncluded,
+        });
+      } catch (err) {
+        console.error('Analytics tracking failed:', err);
+      }
+
       get().resetForm();
       return data;
     } catch (err) {
@@ -235,6 +255,28 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .eq('id', bookingId);
 
       if (error) throw error;
+
+      // Update local state dynamically to avoid fetch latencies
+      set((state) => {
+        const updateItem = (b: Booking) => b.id === bookingId ? { ...b, status } : b;
+        const allBookings = [
+          ...state.activeBookings.map(updateItem),
+          ...state.pastBookings.map(updateItem),
+        ];
+
+        // Filter duplicates
+        const unique = allBookings.filter((b, idx, self) => self.findIndex(x => x.id === b.id) === idx);
+        
+        const active = unique.filter((b) =>
+          !['completed', 'verified', 'closed', 'cancelled', 'declined'].includes(b.status)
+        );
+        const past = unique.filter((b) =>
+          ['completed', 'verified', 'closed', 'cancelled', 'declined'].includes(b.status)
+        );
+
+        return { activeBookings: active, pastBookings: past };
+      });
+
       return true;
     } catch (err) {
       console.error('Error updating booking status:', err);
@@ -244,6 +286,16 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
   cancelBooking: async (bookingId, reason) => {
     try {
+      // Refund escrow payment if exists and is held
+      try {
+        const payment = await fetchBookingPayment(bookingId);
+        if (payment && payment.status === 'held') {
+          await refundPayment(payment.id);
+        }
+      } catch (err) {
+        console.error('Error refunding payment during cancellation:', err);
+      }
+
       const { error } = await supabase
         .from('bookings')
         .update({
@@ -254,9 +306,131 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .eq('id', bookingId);
 
       if (error) throw error;
+
+      // Update local state dynamically to avoid fetch latencies
+      set((state) => {
+        const updateItem = (b: Booking) => b.id === bookingId ? { ...b, status: 'cancelled' as BookingStatus, cancellation_reason: reason } : b;
+        const allBookings = [
+          ...state.activeBookings.map(updateItem),
+          ...state.pastBookings.map(updateItem),
+        ];
+
+        const unique = allBookings.filter((b, idx, self) => self.findIndex(x => x.id === b.id) === idx);
+
+        const active = unique.filter((b) =>
+          !['completed', 'verified', 'closed', 'cancelled', 'declined'].includes(b.status)
+        );
+        const past = unique.filter((b) =>
+          ['completed', 'verified', 'closed', 'cancelled', 'declined'].includes(b.status)
+        );
+
+        return { activeBookings: active, pastBookings: past };
+      });
+
       return true;
     } catch (err) {
       console.error('Error cancelling booking:', err);
+      return false;
+    }
+  },
+
+  applyForJob: async (bookingId, cleanerId) => {
+    try {
+      const { error } = await supabase
+        .from('booking_applications')
+        .insert({
+          booking_id: bookingId,
+          cleaner_id: cleanerId,
+          status: 'pending',
+        });
+
+      if (error) throw error;
+
+      try {
+        const { trackEvent } = await import('@/lib/analytics');
+        trackEvent('bid_applied', { bookingId, cleanerId });
+      } catch (err) {
+        console.error('Analytics tracking failed:', err);
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Error applying for job:', err);
+      return false;
+    }
+  },
+
+  fetchBookingApplications: async (bookingId) => {
+    try {
+      const { data, error } = await supabase
+        .from('booking_applications')
+        .select(`
+          *,
+          cleaner:profiles(
+            *,
+            cleaner_profile:cleaner_profiles(*)
+          )
+        `)
+        .eq('booking_id', bookingId);
+
+      if (error) throw error;
+      return data ?? [];
+    } catch (err) {
+      console.error('Error fetching booking applications:', err);
+      return [];
+    }
+  },
+
+  hireCleaner: async (bookingId, appId, cleanerId) => {
+    try {
+      // 1. Assign cleaner to booking and change status to accepted
+      const { error: bookingError } = await supabase
+        .from('bookings')
+        .update({
+          cleaner_id: cleanerId,
+          status: 'accepted',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', bookingId);
+
+      if (bookingError) throw bookingError;
+
+      // 2. Accept this application
+      const { error: appAcceptError } = await supabase
+        .from('booking_applications')
+        .update({ status: 'accepted', updated_at: new Date().toISOString() })
+        .eq('id', appId);
+
+      if (appAcceptError) throw appAcceptError;
+
+      // 3. Decline other applications
+      const { error: appDeclineError } = await supabase
+        .from('booking_applications')
+        .update({ status: 'declined', updated_at: new Date().toISOString() })
+        .eq('booking_id', bookingId)
+        .neq('id', appId);
+
+      if (appDeclineError) throw appDeclineError;
+
+      try {
+        const { trackEvent } = await import('@/lib/analytics');
+        trackEvent('cleaner_hired', { bookingId, cleanerId, applicationId: appId });
+      } catch (err) {
+        console.error('Analytics tracking failed:', err);
+      }
+
+      // Update local state
+      set((state) => {
+        const updateItem = (b: Booking) => b.id === bookingId ? { ...b, status: 'accepted' as BookingStatus, cleaner_id: cleanerId } : b;
+        return {
+          activeBookings: state.activeBookings.map(updateItem),
+          pastBookings: state.pastBookings.map(updateItem),
+        };
+      });
+
+      return true;
+    } catch (err) {
+      console.error('Error hiring cleaner:', err);
       return false;
     }
   },

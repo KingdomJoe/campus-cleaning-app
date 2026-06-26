@@ -176,6 +176,18 @@ export interface Dispute {
   created_at: string;
 }
 
+export interface BookingApplication {
+  id: string;
+  booking_id: string;
+  cleaner_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+  updated_at: string;
+  // Joined
+  cleaner?: Profile;
+  cleaner_profile?: CleanerProfile;
+}
+
 // Schema types needed for Supabase type resolution
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -187,6 +199,7 @@ export type Database = {
       cleaner_documents:       { Row: CleanerDocument; Insert: Partial<CleanerDocument>; Update: Partial<CleanerDocument>; Relationships: [] };
       service_types:           { Row: ServiceType; Insert: Partial<ServiceType>; Update: Partial<ServiceType>; Relationships: [] };
       bookings:                { Row: Booking; Insert: Partial<Booking>; Update: Partial<Booking>; Relationships: [] };
+      booking_applications:    { Row: BookingApplication; Insert: Partial<BookingApplication>; Update: Partial<BookingApplication>; Relationships: [] };
       booking_photos:          { Row: BookingPhoto; Insert: Partial<BookingPhoto>; Update: Partial<BookingPhoto>; Relationships: [] };
       messages:                { Row: Message; Insert: Partial<Message>; Update: Partial<Message>; Relationships: [] };
       reviews:                 { Row: Review; Insert: Partial<Review>; Update: Partial<Review>; Relationships: [] };

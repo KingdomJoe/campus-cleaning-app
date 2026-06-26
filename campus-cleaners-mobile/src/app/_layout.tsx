@@ -11,6 +11,7 @@ import { setupNotificationResponseHandler } from '@/lib/notifications';
 
 export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
+  const session = useAuthStore((s) => s.session);
   const { themeMode, initializeTheme } = useThemeStore();
 
   useEffect(() => {
@@ -22,6 +23,24 @@ export default function RootLayout() {
       cleanup();
     };
   }, [initialize]);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      registerPushToken(session.user.id);
+    }
+  }, [session]);
+
+  const registerPushToken = async (userId: string) => {
+    try {
+      const { registerForPushNotifications, savePushToken } = await import('@/lib/notifications');
+      const token = await registerForPushNotifications();
+      if (token) {
+        await savePushToken(userId, token);
+      }
+    } catch (err) {
+      console.error('Error registering push token:', err);
+    }
+  };
 
   const activeTheme = themeMode === 'dark' ? darkTheme : lightTheme;
 

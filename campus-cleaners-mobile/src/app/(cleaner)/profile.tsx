@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import StarRating from '@/components/StarRating';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 import { useThemeStore } from '@/stores/themeStore';
-import { pickImage, uploadAvatar } from '@/lib/api/uploads';
+import { pickImage, takePhoto, uploadAvatar, uploadDocument } from '@/lib/api/uploads';
 import { supabase } from '@/lib/supabase';
 
 const verificationStatusConfig = {
@@ -48,6 +48,98 @@ export default function CleanerProfileScreen() {
     }
   }, [cleanerProfile]);
 
+  const [documents, setDocuments] = useState<Record<string, string | null>>({
+    ghana_card: null,
+    student_id: null,
+    selfie: null,
+  });
+
+  useEffect(() => {
+    loadDocuments();
+  }, [profile?.id]);
+
+  const loadDocuments = async () => {
+    if (!profile?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('cleaner_documents')
+        .select('document_type, file_url')
+        .eq('cleaner_id', profile.id);
+      
+      if (error) throw error;
+      
+      const docsMap: Record<string, string | null> = {
+        ghana_card: null,
+        student_id: null,
+        selfie: null,
+      };
+      
+      data?.forEach((doc) => {
+        docsMap[doc.document_type] = doc.file_url;
+      });
+      
+      setDocuments(docsMap);
+    } catch (err) {
+      console.error('Error loading documents:', err);
+    }
+  };
+
+  const checkAndAutoPending = async (updatedDocs: typeof documents) => {
+    if (!profile?.id || !cleanerProfile) return;
+    
+    const willHavePhoto = !!profile.avatar_url;
+    const willHaveBio = !!cleanerProfile.bio?.trim();
+    const willHaveMomo = !!cleanerProfile.mobile_money_number?.trim();
+    const willHaveSkills = cleanerProfile.skills && cleanerProfile.skills.length > 0;
+    const willHaveGuarantor = !!(cleanerProfile.guarantor_name?.trim() && cleanerProfile.guarantor_phone?.trim());
+    const willHaveGhanaCard = !!updatedDocs.ghana_card;
+    const willHaveSelfie = !!updatedDocs.selfie;
+
+    let pct = 0;
+    if (willHavePhoto) pct += 15;
+    if (willHaveBio) pct += 15;
+    if (willHaveMomo) pct += 15;
+    if (willHaveSkills) pct += 15;
+    if (willHaveGuarantor) pct += 15;
+    if (willHaveGhanaCard) pct += 15;
+    if (willHaveSelfie) pct += 10;
+
+    if (pct === 100 && cleanerProfile.verification_status !== 'approved' && cleanerProfile.verification_status !== 'pending') {
+      await supabase
+        .from('cleaner_profiles')
+        .update({ verification_status: 'pending' })
+        .eq('user_id', profile.id);
+      await fetchProfile();
+    }
+  };
+
+  const handleUploadDoc = async (type: 'ghana_card' | 'student_id' | 'selfie') => {
+    if (!profile?.id) return;
+    try {
+      const uri = type === 'selfie'
+        ? await takePhoto({ aspect: [1, 1], quality: 0.8 })
+        : await pickImage({ aspect: [4, 3], quality: 0.8 });
+        
+      if (!uri) return;
+      
+      setIsUploadingPhoto(true);
+      const publicUrl = await uploadDocument(profile.id, type, uri);
+      if (publicUrl) {
+        const updatedDocs = { ...documents, [type]: publicUrl };
+        setDocuments(updatedDocs);
+        Alert.alert('Success', `${type.replace('_', ' ')} uploaded successfully!`);
+        await checkAndAutoPending(updatedDocs);
+      } else {
+        Alert.alert('Error', 'Failed to upload document.');
+      }
+    } catch (err) {
+      console.error('Document upload error:', err);
+      Alert.alert('Error', 'Failed to upload document.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
     router.replace('/(auth)/welcome');
@@ -59,13 +151,17 @@ export default function CleanerProfileScreen() {
   const hasMomo = !!cleanerProfile?.mobile_money_number?.trim();
   const hasSkills = !!(cleanerProfile?.skills && cleanerProfile.skills.length > 0);
   const hasGuarantor = !!(cleanerProfile?.guarantor_name?.trim() && cleanerProfile?.guarantor_phone?.trim());
+  const hasGhanaCard = !!documents.ghana_card;
+  const hasSelfie = !!documents.selfie;
 
   let completionPct = 0;
-  if (hasPhoto) completionPct += 20;
-  if (hasBio) completionPct += 20;
-  if (hasMomo) completionPct += 20;
-  if (hasSkills) completionPct += 20;
-  if (hasGuarantor) completionPct += 20;
+  if (hasPhoto) completionPct += 15;
+  if (hasBio) completionPct += 15;
+  if (hasMomo) completionPct += 15;
+  if (hasSkills) completionPct += 15;
+  if (hasGuarantor) completionPct += 15;
+  if (hasGhanaCard) completionPct += 15;
+  if (hasSelfie) completionPct += 10;
 
   const verificationStatus =
     completionPct < 100
@@ -126,13 +222,17 @@ export default function CleanerProfileScreen() {
       const willHaveMomo = !!momo.trim();
       const willHaveSkills = skills.length > 0;
       const willHaveGuarantor = !!(guarantorName.trim() && formattedGuarantorPhone.trim());
+      const willHaveGhanaCard = !!documents.ghana_card;
+      const willHaveSelfie = !!documents.selfie;
 
       let newPct = 0;
-      if (willHavePhoto) newPct += 20;
-      if (willHaveBio) newPct += 20;
-      if (willHaveMomo) newPct += 20;
-      if (willHaveSkills) newPct += 20;
-      if (willHaveGuarantor) newPct += 20;
+      if (willHavePhoto) newPct += 15;
+      if (willHaveBio) newPct += 15;
+      if (willHaveMomo) newPct += 15;
+      if (willHaveSkills) newPct += 15;
+      if (willHaveGuarantor) newPct += 15;
+      if (willHaveGhanaCard) newPct += 15;
+      if (willHaveSelfie) newPct += 10;
 
       // Auto-transition to pending review if 100% complete and not already approved
       const autoPending = newPct === 100 && cleanerProfile?.verification_status !== 'approved';
@@ -212,7 +312,7 @@ export default function CleanerProfileScreen() {
         {cleanerProfile && cleanerProfile.avg_rating !== null && cleanerProfile.avg_rating > 0 && (
           <View style={styles.ratingRow}>
             <StarRating rating={cleanerProfile.avg_rating} showValue size={20} />
-            <Text style={styles.jobCount} variant="bodySmall">
+            <Text style={[styles.jobCount, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">
               ({cleanerProfile.total_jobs} job{cleanerProfile.total_jobs !== 1 ? 's' : ''})
             </Text>
           </View>
@@ -229,11 +329,13 @@ export default function CleanerProfileScreen() {
           <ProgressBar progress={completionPct / 100} color={completionPct === 100 ? theme.colors.primary : theme.colors.secondary} style={styles.progressBar} />
           
           <View style={styles.checklist}>
-            <Text style={styles.checkItem} variant="bodySmall">{hasPhoto ? '✅' : '❌'} Profile Photo</Text>
-            <Text style={styles.checkItem} variant="bodySmall">{hasBio ? '✅' : '❌'} Short Bio</Text>
-            <Text style={styles.checkItem} variant="bodySmall">{hasMomo ? '✅' : '❌'} Mobile Money Number</Text>
-            <Text style={styles.checkItem} variant="bodySmall">{hasSkills ? '✅' : '❌'} Professional Skills</Text>
-            <Text style={styles.checkItem} variant="bodySmall">{hasGuarantor ? '✅' : '❌'} Guarantor Details</Text>
+            <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">{hasPhoto ? '✅' : '❌'} Profile Photo</Text>
+            <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">{hasBio ? '✅' : '❌'} Short Bio</Text>
+            <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">{hasMomo ? '✅' : '❌'} Mobile Money Number</Text>
+            <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">{hasSkills ? '✅' : '❌'} Professional Skills</Text>
+            <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">{hasGuarantor ? '✅' : '❌'} Guarantor Details</Text>
+            <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">{hasGhanaCard ? '✅' : '❌'} Ghana Card (National ID)</Text>
+            <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">{hasSelfie ? '✅' : '❌'} Selfie Verification</Text>
           </View>
         </Card.Content>
       </Card>
@@ -374,16 +476,11 @@ export default function CleanerProfileScreen() {
               <InfoRow icon="💰" label="MoMo Number" value={cleanerProfile?.mobile_money_number ?? '—'} />
               <InfoRow icon="👤" label="Guarantor Name" value={cleanerProfile?.guarantor_name ?? '—'} />
               <InfoRow icon="📞" label="Guarantor Phone" value={cleanerProfile?.guarantor_phone ?? '—'} />
-              <InfoRow
-                icon="🟢"
-                label="Availability"
-                value={cleanerProfile?.availability ?? 'offline'}
-              />
 
               {cleanerProfile?.bio && (
                 <>
                   <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-                  <Text style={styles.bioLabel} variant="labelSmall">Bio</Text>
+                  <Text style={[styles.bioLabel, { color: theme.colors.onSurfaceVariant }]} variant="labelSmall">Bio</Text>
                   <Text style={[styles.bioText, { color: theme.colors.onSurface }]} variant="bodyMedium">
                     {cleanerProfile.bio}
                   </Text>
@@ -393,13 +490,13 @@ export default function CleanerProfileScreen() {
               {cleanerProfile?.skills && cleanerProfile.skills.length > 0 && (
                 <>
                   <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-                  <Text style={styles.bioLabel} variant="labelSmall">Skills</Text>
+                  <Text style={[styles.bioLabel, { color: theme.colors.onSurfaceVariant }]} variant="labelSmall">Skills</Text>
                   <View style={styles.skillsRow}>
                     {cleanerProfile.skills.map((skill) => (
                       <Chip
                         key={skill}
-                        style={styles.skillChip}
-                        textStyle={styles.skillText}
+                        style={[styles.skillChip, { backgroundColor: theme.colors.primaryContainer }]}
+                        textStyle={{ color: theme.colors.onPrimaryContainer, fontSize: 12 }}
                         compact
                       >
                         {skill}
@@ -410,6 +507,39 @@ export default function CleanerProfileScreen() {
               )}
             </View>
           )}
+        </Card.Content>
+      </Card>
+
+      {/* Verification Documents Card */}
+      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
+        <Card.Content>
+          <Text style={[styles.sectionTitle, { color: theme.colors.primary }]} variant="labelLarge">Verification Documents</Text>
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+          
+          <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 13, marginBottom: spacing.sm }} variant="bodySmall">
+            Please upload clear photos of your documents. Our admin team will review them for approval.
+          </Text>
+
+          <DocUploadRow
+            label="Ghana Card (National ID) *"
+            url={documents.ghana_card}
+            onUpload={() => handleUploadDoc('ghana_card')}
+            uploading={isUploadingPhoto}
+          />
+          
+          <DocUploadRow
+            label="Student ID (Optional)"
+            url={documents.student_id}
+            onUpload={() => handleUploadDoc('student_id')}
+            uploading={isUploadingPhoto}
+          />
+          
+          <DocUploadRow
+            label="Selfie Verification *"
+            url={documents.selfie}
+            onUpload={() => handleUploadDoc('selfie')}
+            uploading={isUploadingPhoto}
+          />
         </Card.Content>
       </Card>
 
@@ -461,6 +591,41 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
   );
 }
 
+function DocUploadRow({ label, url, onUpload, uploading }: { label: string; url: string | null; onUpload: () => void; uploading: boolean }) {
+  const theme = useTheme();
+  return (
+    <View style={docStyles.row}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: theme.colors.onSurface, fontWeight: '600' }} variant="bodyMedium">{label}</Text>
+        <Text style={{ color: url ? colors.success : colors.error, fontSize: 12 }} variant="bodySmall">
+          {url ? '✓ Uploaded' : '✗ Missing'}
+        </Text>
+      </View>
+      {url && (
+        <Avatar.Image
+          size={40}
+          source={{ uri: url }}
+          style={{ marginRight: spacing.sm, backgroundColor: 'transparent' }}
+        />
+      )}
+      <Button
+        mode={url ? 'outlined' : 'contained'}
+        onPress={onUpload}
+        disabled={uploading}
+        compact
+        buttonColor={url ? undefined : theme.colors.primary}
+        style={{ borderRadius: 8 }}
+      >
+        {url ? 'Replace' : 'Upload'}
+      </Button>
+    </View>
+  );
+}
+
+const docStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+});
+
 const infoStyles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   icon: { fontSize: 20, width: 28, textAlign: 'center' },
@@ -469,7 +634,7 @@ const infoStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   header: { alignItems: 'center', paddingVertical: spacing.xl },
   avatarWrapper: { position: 'relative' },
@@ -486,35 +651,35 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.white,
   },
-  name: { color: colors.onBackground, fontWeight: '700', marginTop: spacing.md },
+  name: { fontWeight: '700', marginTop: spacing.md },
   role: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   verificationChip: { marginTop: spacing.md, backgroundColor: 'transparent' },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
-  jobCount: { color: colors.onSurfaceVariant },
-  card: { backgroundColor: colors.surfaceVariant, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.outline, marginBottom: spacing.lg },
+  jobCount: {},
+  card: { borderRadius: borderRadius.lg, borderWidth: 1, marginBottom: spacing.lg },
   sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { color: colors.primary, fontWeight: '600' },
-  divider: { backgroundColor: colors.outline, marginVertical: spacing.sm },
-  bioLabel: { color: colors.onSurfaceVariant, marginBottom: 4 },
-  bioText: { color: colors.onSurface },
+  divider: { marginVertical: spacing.sm },
+  bioLabel: { marginBottom: 4 },
+  bioText: {},
   skillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
-  skillChip: { backgroundColor: colors.primaryContainer },
-  skillText: { color: colors.primary, fontSize: 12 },
-  logoutBtn: { borderColor: colors.error, borderRadius: 12, marginTop: spacing.md },
+  skillChip: {},
+  skillText: {},
+  logoutBtn: { borderRadius: 12, marginTop: spacing.md },
   
   // Completion Gauge
   gaugeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   progressBar: { height: 8, borderRadius: 4, marginBottom: spacing.md },
   checklist: { gap: spacing.xs, paddingLeft: spacing.xs },
-  checkItem: { color: colors.onSurfaceVariant },
+  checkItem: {},
   
   // Edit Mode Styles
   editForm: { gap: spacing.md, marginTop: spacing.xs },
   textInput: { backgroundColor: 'transparent' },
   fieldLabel: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   chipEditRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
-  skillChipEdit: { backgroundColor: colors.surfaceVariant, borderWidth: 1, borderColor: colors.outline },
-  formDivider: { height: 1, backgroundColor: colors.outline, marginVertical: spacing.sm },
+  skillChipEdit: { borderWidth: 1 },
+  formDivider: { height: 1, marginVertical: spacing.sm },
   editActionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.md, marginTop: spacing.md },
   actionBtn: { borderRadius: 8, minWidth: 90 },
 });

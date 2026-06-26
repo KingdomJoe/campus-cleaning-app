@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, TextInput } from 'react-native-paper';
+import { Text, Button, TextInput, ActivityIndicator } from 'react-native-paper';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '@/lib/supabase';
 import { submitReview } from '@/lib/api/reviews';
 import StarRating from '@/components/StarRating';
 import { colors, spacing, borderRadius } from '@/lib/theme';
@@ -17,17 +18,40 @@ export default function RateScreen() {
   const [comment, setComment] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [cleanerId, setCleanerId] = useState<string | null>(null);
+  const [fetchingBooking, setFetchingBooking] = useState(true);
 
-  const allRated = quality > 0 && punctuality > 0 && professionalism > 0 && communication > 0;
+  useEffect(() => {
+    async function loadBooking() {
+      if (!bookingId) return;
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('cleaner_id')
+          .eq('id', bookingId)
+          .single();
+        if (data && data.cleaner_id) {
+          setCleanerId(data.cleaner_id);
+        }
+      } catch (err) {
+        console.error('Error fetching booking details for rating:', err);
+      } finally {
+        setFetchingBooking(false);
+      }
+    }
+    loadBooking();
+  }, [bookingId]);
+
+  const allRated = quality > 0 && punctuality > 0 && professionalism > 0 && communication > 0 && !!cleanerId;
 
   const handleSubmit = async () => {
-    if (!profile?.id || !bookingId || !allRated) return;
+    if (!profile?.id || !bookingId || !allRated || !cleanerId) return;
     setIsLoading(true);
 
     const review = await submitReview({
       bookingId: bookingId,
       clientId: profile.id,
-      cleanerId: '', // Will be set from booking data server-side
+      cleanerId: cleanerId,
       qualityRating: quality,
       punctualityRating: punctuality,
       professionalismRating: professionalism,
@@ -37,9 +61,52 @@ export default function RateScreen() {
 
     setIsLoading(false);
     if (review) {
+      try {
+        const { trackEvent } = await import('@/lib/analytics');
+        trackEvent('review_submitted', {
+          bookingId: bookingId,
+          cleanerId: cleanerId,
+          rating: Number(review.overall_rating),
+        });
+      } catch (err) {
+        console.error('Analytics tracking failed:', err);
+      }
       setSubmitted(true);
     }
   };
+
+  if (fetchingBooking) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator animating color={colors.primary} size="large" />
+        <Text style={{ marginTop: 16, color: colors.onSurfaceVariant }} variant="bodyMedium">
+          Loading booking details...
+        </Text>
+      </View>
+    );
+  }
+
+  if (!cleanerId) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: spacing.xl }]}>
+        <Text style={styles.successIcon}>⚠️</Text>
+        <Text style={styles.successTitle} variant="headlineSmall">
+          No Cleaner Assigned
+        </Text>
+        <Text style={styles.successText} variant="bodyLarge">
+          You cannot rate a booking that does not have an assigned cleaner.
+        </Text>
+        <Button
+          mode="contained"
+          onPress={() => router.back()}
+          buttonColor={colors.primary}
+          style={styles.btn}
+        >
+          Go Back
+        </Button>
+      </View>
+    );
+  }
 
   if (submitted) {
     return (

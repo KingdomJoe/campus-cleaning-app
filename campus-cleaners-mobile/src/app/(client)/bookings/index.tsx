@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, FlatList } from 'react-native';
-import { SegmentedButtons } from 'react-native-paper';
-import { router } from 'expo-router';
+import { SegmentedButtons, useTheme } from 'react-native-paper';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import BookingCard from '@/components/BookingCard';
@@ -13,17 +13,20 @@ export default function BookingsListScreen() {
   const profile = useAuthStore((s) => s.profile);
   const { activeBookings, pastBookings, isLoading, fetchClientBookings } = useBookingStore();
   const [tab, setTab] = useState('active');
+  const theme = useTheme();
 
-  useEffect(() => {
-    if (profile?.id) fetchClientBookings(profile.id);
-  }, [profile?.id]);
+  useFocusEffect(
+    useCallback(() => {
+      if (profile?.id) fetchClientBookings(profile.id);
+    }, [profile?.id])
+  );
 
   if (isLoading) return <LoadingScreen message="Loading bookings..." />;
 
   const data = tab === 'active' ? activeBookings : pastBookings;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <SegmentedButtons
         value={tab}
         onValueChange={setTab}
@@ -59,7 +62,7 @@ export default function BookingsListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   segment: { marginHorizontal: spacing.lg, marginVertical: spacing.md },
   segBtn: { borderColor: colors.outline },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },

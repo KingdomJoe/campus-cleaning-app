@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Text, Card, Avatar, Button, useTheme } from 'react-native-paper';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import { supabase } from '@/lib/supabase';
@@ -15,12 +15,17 @@ export default function ClientHomeScreen() {
   const { activeBookings, fetchClientBookings } = useBookingStore();
   const [services, setServices] = useState<ServiceType[]>([]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (profile?.id) {
+        fetchClientBookings(profile.id);
+      }
+    }, [profile?.id])
+  );
+
   useEffect(() => {
-    if (profile?.id) {
-      fetchClientBookings(profile.id);
-    }
     fetchServices();
-  }, [profile?.id]);
+  }, []);
 
   const fetchServices = async () => {
     const { data } = await supabase
@@ -42,7 +47,7 @@ export default function ClientHomeScreen() {
       {/* Greeting */}
       <View style={styles.greeting}>
         <View>
-          <Text style={styles.hello} variant="bodyLarge">
+          <Text style={[styles.hello, { color: theme.colors.onSurfaceVariant }]} variant="bodyLarge">
             Hello, {firstName} 👋
           </Text>
           <Text style={[styles.greetingTitle, { color: theme.colors.onBackground }]} variant="headlineSmall">
@@ -163,7 +168,6 @@ export default function ClientHomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   content: {
     paddingHorizontal: spacing.lg,
@@ -176,10 +180,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   hello: {
-    color: colors.onSurfaceVariant,
+    // color determined dynamically
   },
   greetingTitle: {
-    color: colors.white,
     fontWeight: '700',
     marginTop: 2,
   },
@@ -190,7 +193,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   sectionTitle: {
-    color: colors.white,
     fontWeight: '700',
     marginBottom: spacing.md,
   },
@@ -203,10 +205,8 @@ const styles = StyleSheet.create({
     width: '47%',
   },
   serviceCardInner: {
-    backgroundColor: colors.surfaceVariant,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.outline,
   },
   serviceContent: {
     alignItems: 'center',
@@ -218,7 +218,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   serviceName: {
-    color: colors.white,
     fontWeight: '600',
     textAlign: 'center',
   },

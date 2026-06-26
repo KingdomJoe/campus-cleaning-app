@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, Card, Divider } from 'react-native-paper';
+import { Text, Button, Card, Divider, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useBookingStore } from '@/stores/bookingStore';
 import { useAuthStore } from '@/stores/authStore';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 
 export default function BookingSummaryScreen() {
-  const { form, createBooking, resetForm } = useBookingStore();
+  const theme = useTheme();
+  const { form, createBooking } = useBookingStore();
   const profile = useAuthStore((s) => s.profile);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -45,11 +46,11 @@ export default function BookingSummaryScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Card style={styles.card} mode="contained">
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
         <Card.Content>
-          <Text style={styles.cardTitle} variant="titleMedium">Booking Details</Text>
-          <Divider style={styles.divider} />
+          <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]} variant="titleMedium">Booking Details</Text>
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
 
           <DetailRow label="Service" value={form.serviceCategory === 'cleaning' ? '🧹 Cleaning' : '👕 Laundry'} />
           <DetailRow label="Location" value={form.location} />
@@ -67,7 +68,7 @@ export default function BookingSummaryScreen() {
 
           {form.serviceCategory === 'laundry' && form.laundryItems.length > 0 && (
             <>
-              <Divider style={styles.divider} />
+              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
               <Text style={styles.subTitle} variant="labelLarge">Laundry Items</Text>
               {form.laundryItems.map((item) => (
                 <DetailRow
@@ -81,21 +82,21 @@ export default function BookingSummaryScreen() {
 
           {form.description ? (
             <>
-              <Divider style={styles.divider} />
-              <Text style={styles.notesLabel} variant="labelSmall">Notes</Text>
-              <Text style={styles.notesValue} variant="bodySmall">{form.description}</Text>
+              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+              <Text style={[styles.notesLabel, { color: theme.colors.onSurfaceVariant }]} variant="labelSmall">Notes</Text>
+              <Text style={[styles.notesValue, { color: theme.colors.onSurface }]} variant="bodySmall">{form.description}</Text>
             </>
           ) : null}
         </Card.Content>
       </Card>
 
-      <Card style={styles.priceCard} mode="contained">
+      <Card style={[styles.priceCard, { backgroundColor: theme.colors.primaryContainer }]} mode="contained">
         <Card.Content style={styles.priceContent}>
-          <Text style={styles.priceLabel} variant="titleSmall">Total Price</Text>
+          <Text style={[styles.priceLabel, { color: theme.colors.onPrimaryContainer }]} variant="titleSmall">Total Price</Text>
           <Text style={styles.priceValue} variant="headlineMedium">
             GH₵ {totalPrice.toFixed(2)}
           </Text>
-          <Text style={styles.priceNote} variant="bodySmall">
+          <Text style={[styles.priceNote, { color: theme.colors.onPrimaryContainer }]} variant="bodySmall">
             Payment held in escrow until work is verified
           </Text>
         </Card.Content>
@@ -113,7 +114,7 @@ export default function BookingSummaryScreen() {
         style={styles.btn}
         contentStyle={styles.btnContent}
         labelStyle={styles.btnLabel}
-        buttonColor={colors.primary}
+        buttonColor={theme.colors.primary}
         icon="check-circle"
       >
         Confirm Booking
@@ -122,7 +123,7 @@ export default function BookingSummaryScreen() {
       <Button
         mode="text"
         onPress={() => router.back()}
-        textColor={colors.onSurfaceVariant}
+        textColor={theme.colors.onSurfaceVariant}
       >
         ← Edit Details
       </Button>
@@ -131,34 +132,35 @@ export default function BookingSummaryScreen() {
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
+  const theme = useTheme();
   return (
     <View style={detailStyles.row}>
-      <Text style={detailStyles.label} variant="bodySmall">{label}</Text>
-      <Text style={detailStyles.value} variant="bodyMedium">{value}</Text>
+      <Text style={[detailStyles.label, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">{label}</Text>
+      <Text style={[detailStyles.value, { color: theme.colors.onSurface }]} variant="bodyMedium">{value}</Text>
     </View>
   );
 }
 
 const detailStyles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  label: { color: colors.onSurfaceVariant },
-  value: { color: colors.white, fontWeight: '600' },
+  label: {},
+  value: { fontWeight: '600' },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
-  card: { backgroundColor: colors.surfaceVariant, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.outline },
-  cardTitle: { color: colors.white, fontWeight: '700' },
+  card: { borderRadius: borderRadius.lg, borderWidth: 1 },
+  cardTitle: { fontWeight: '700' },
   subTitle: { color: colors.primary, fontWeight: '600', marginBottom: spacing.xs },
-  divider: { marginVertical: spacing.sm, backgroundColor: colors.outline },
-  notesLabel: { color: colors.onSurfaceVariant, marginBottom: 4 },
-  notesValue: { color: colors.onSurface },
-  priceCard: { backgroundColor: colors.primaryContainer, borderRadius: borderRadius.lg },
+  divider: { marginVertical: spacing.sm },
+  notesLabel: { marginBottom: 4 },
+  notesValue: {},
+  priceCard: { borderRadius: borderRadius.lg },
   priceContent: { alignItems: 'center', paddingVertical: spacing.lg },
-  priceLabel: { color: colors.onPrimaryContainer },
+  priceLabel: {},
   priceValue: { color: colors.primary, fontWeight: '800', marginVertical: spacing.xs },
-  priceNote: { color: colors.onPrimaryContainer, opacity: 0.8 },
+  priceNote: { opacity: 0.8 },
   error: { color: colors.error, textAlign: 'center' },
   btn: { borderRadius: 12 },
   btnContent: { paddingVertical: 6 },

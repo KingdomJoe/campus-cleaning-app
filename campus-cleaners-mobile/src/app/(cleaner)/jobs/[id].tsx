@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { Text, Button, Card, Divider } from 'react-native-paper';
+import { Text, Button, Card, Divider, useTheme, ActivityIndicator, Portal, Dialog, RadioButton } from 'react-native-paper';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -20,12 +20,18 @@ const STATUS_TRANSITIONS: Record<string, { next: BookingStatus; label: string; i
 };
 
 export default function JobDetailScreen() {
+  const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const profile = useAuthStore((s) => s.profile);
-  const { updateBookingStatus } = useBookingStore();
+  const { updateBookingStatus, applyForJob, cancelBooking } = useBookingStore();
   const [booking, setBooking] = useState<Booking | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [hasApplied, setHasApplied] = useState(false);
+  const [appStatus, setAppStatus] = useState<string | null>(null);
+  const [loadingApp, setLoadingApp] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState('Emergency');
 
   useEffect(() => {
     loadBooking();
@@ -33,6 +39,7 @@ export default function JobDetailScreen() {
 
   const loadBooking = async () => {
     if (!id) return;
+    setIsLoading(true);
 
     const { data } = await supabase
       .from('bookings')
@@ -46,7 +53,57 @@ export default function JobDetailScreen() {
       .single();
 
     setBooking(data);
+
+    if (profile && data) {
+      setLoadingApp(true);
+      const { data: appData } = await supabase
+        .from('booking_applications')
+        .select('*')
+        .eq('booking_id', data.id)
+        .eq('cleaner_id', profile.id)
+        .maybeSingle();
+
+      if (appData) {
+        setHasApplied(true);
+        setAppStatus(appData.status);
+      } else {
+        setHasApplied(false);
+        setAppStatus(null);
+      }
+      setLoadingApp(false);
+    }
+
     setIsLoading(false);
+  };
+
+  const handleApply = async () => {
+    if (!booking || !profile) return;
+
+    // Security check: only verified cleaners can apply for jobs
+    const cleanerProfile = useAuthStore.getState().cleanerProfile;
+    const isApproved = cleanerProfile?.verification_status === 'approved';
+    if (!isApproved) {
+      Alert.alert('Not Verified', 'Your cleaner profile must be verified by an admin before applying for jobs.');
+      return;
+    }
+
+    setUpdating(true);
+    const success = await applyForJob(booking.id, profile.id);
+    if (success) {
+      // Notify client
+      await createNotification({
+        userId: booking.client_id,
+        title: 'New offer for your booking! 🧹',
+        body: `${profile.full_name} has applied for your job at ${booking.location}.`,
+        data: { bookingId: booking.id, role: 'client' },
+      });
+
+      Alert.alert('Success', 'Application submitted successfully!');
+      loadBooking();
+    } else {
+      Alert.alert('Error', 'Failed to submit application.');
+    }
+    setUpdating(false);
   };
 
   const handleStatusUpdate = async () => {
@@ -54,39 +111,29 @@ export default function JobDetailScreen() {
     const transition = STATUS_TRANSITIONS[booking.status];
     if (!transition) return;
 
-    // Security check: only verified cleaners can accept/update jobs
     const cleanerProfile = useAuthStore.getState().cleanerProfile;
     const isApproved = cleanerProfile?.verification_status === 'approved';
     if (!isApproved) {
-      Alert.alert('Not Verified', 'Your cleaner profile must be verified by an admin before accepting or updating jobs.');
+      Alert.alert('Not Verified', 'Your cleaner profile must be verified by an admin.');
       return;
     }
 
     setUpdating(true);
 
-    // If accepting, assign cleaner to the booking
-    if (booking.status === 'requested') {
-      const { error } = await supabase
-        .from('bookings')
-        .update({
-          cleaner_id: profile.id,
-          status: transition.next,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', booking.id);
-
-      if (!error) {
-        // Notify client
-        await createNotification({
-          userId: booking.client_id,
-          title: 'Job Accepted! 🎉',
-          body: `${profile.full_name} has accepted your booking.`,
-          data: { bookingId: booking.id, role: 'client' },
+    const success = await updateBookingStatus(booking.id, transition.next);
+    if (success) {
+      try {
+        const { trackEvent } = await import('@/lib/analytics');
+        trackEvent('job_status_changed', {
+          bookingId: booking.id,
+          oldStatus: booking.status,
+          newStatus: transition.next,
         });
+      } catch (err) {
+        console.error('Analytics tracking failed:', err);
       }
-    } else {
-      const success = await updateBookingStatus(booking.id, transition.next);
-      if (success && booking.client_id) {
+
+      if (booking.client_id) {
         const statusLabels: Record<string, string> = {
           en_route: 'Your cleaner is on the way! 🚶',
           arrived: 'Your cleaner has arrived! 🏠',
@@ -107,35 +154,53 @@ export default function JobDetailScreen() {
     loadBooking();
   };
 
-  const handleDecline = async () => {
-    if (!booking) return;
+  const handleCancelJob = async () => {
+    if (!booking || !profile) return;
     setUpdating(true);
-    await updateBookingStatus(booking.id, 'declined');
+    const success = await cancelBooking(booking.id, `Cleaner Cancelled: ${cancelReason}`);
+    if (success) {
+      if (booking.client_id) {
+        await createNotification({
+          userId: booking.client_id,
+          title: 'Cleaner Cancelled Booking ⚠️',
+          body: `Your cleaner has cancelled the booking due to: ${cancelReason}.`,
+          data: { bookingId: booking.id, role: 'client' },
+        });
+      }
+
+      Alert.alert('Cancelled', 'You have successfully cancelled the job.');
+      loadBooking();
+    } else {
+      Alert.alert('Error', 'Failed to cancel the job.');
+    }
     setUpdating(false);
-    loadBooking();
+    setShowCancelDialog(false);
   };
 
   if (isLoading) return <LoadingScreen />;
   if (!booking) return <LoadingScreen message="Job not found" />;
 
-  const transition = STATUS_TRANSITIONS[booking.status];
-  const canChat = !['cancelled', 'declined', 'closed'].includes(booking.status);
-  const canUploadPhotos = ['arrived', 'started', 'completed'].includes(booking.status);
+  const isAssignedToMe = booking.cleaner_id === profile?.id;
   const isUnassigned = booking.status === 'requested' && !booking.cleaner_id;
 
+  const transition = isAssignedToMe ? STATUS_TRANSITIONS[booking.status] : null;
+  const canChat = isAssignedToMe && !['cancelled', 'declined', 'closed'].includes(booking.status);
+  const canUploadPhotos = isAssignedToMe && ['arrived', 'started', 'completed'].includes(booking.status);
+  const canCancel = isAssignedToMe && ['accepted', 'en_route', 'arrived'].includes(booking.status);
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
       <View style={styles.statusRow}>
         <StatusBadge status={booking.status} />
       </View>
 
       {/* Service Details */}
-      <Card style={styles.card} mode="contained">
+      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
         <Card.Content>
-          <Text style={styles.serviceName} variant="titleLarge">
+          <Text style={[styles.serviceName, { color: theme.colors.onSurface }]} variant="titleLarge">
             {booking.service_type?.name ?? 'Service'}
           </Text>
-          <Divider style={styles.divider} />
+          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
           <DetailRow label="Location" value={booking.location} />
           <DetailRow label="Date" value={booking.scheduled_date} />
           <DetailRow label="Time" value={booking.scheduled_time} />
@@ -144,7 +209,7 @@ export default function JobDetailScreen() {
 
           {booking.room_type && (
             <>
-              <Divider style={styles.divider} />
+              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
               <DetailRow label="Room Type" value={booking.room_type} />
               <DetailRow label="Room Size" value={booking.room_size ?? '—'} />
               <DetailRow label="Rooms" value={String(booking.room_count ?? 1)} />
@@ -154,8 +219,8 @@ export default function JobDetailScreen() {
 
           {booking.laundry_items && Array.isArray(booking.laundry_items) && (
             <>
-              <Divider style={styles.divider} />
-              <Text style={styles.subTitle} variant="labelLarge">Laundry Items</Text>
+              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+              <Text style={[styles.subTitle, { color: theme.colors.primary }]} variant="labelLarge">Laundry Items</Text>
               {(booking.laundry_items as { item_type: string; quantity: number }[]).map((item) => (
                 <DetailRow key={item.item_type} label={item.item_type} value={`× ${item.quantity}`} />
               ))}
@@ -165,11 +230,11 @@ export default function JobDetailScreen() {
       </Card>
 
       {/* Client Info */}
-      {booking.client && (
-        <Card style={styles.card} mode="contained">
+      {booking.client && isAssignedToMe && (
+        <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
           <Card.Content>
-            <Text style={styles.subTitle} variant="titleSmall">Client</Text>
-            <Text style={styles.clientName} variant="titleMedium">
+            <Text style={[styles.subTitle, { color: theme.colors.onSurfaceVariant }]} variant="titleSmall">Client</Text>
+            <Text style={[styles.clientName, { color: theme.colors.onSurface }]} variant="titleMedium">
               {(booking.client as { full_name: string }).full_name}
             </Text>
           </Card.Content>
@@ -178,8 +243,38 @@ export default function JobDetailScreen() {
 
       {/* Actions */}
       <View style={styles.actions}>
-        {/* Primary status transition */}
-        {transition && (
+        {/* Bid/Application Flow */}
+        {isUnassigned && !isAssignedToMe && (
+          loadingApp ? (
+            <ActivityIndicator animating color={theme.colors.primary} />
+          ) : hasApplied ? (
+            <Button
+              mode="contained"
+              disabled
+              style={styles.actionBtn}
+            >
+              {appStatus === 'declined' ? 'Application Declined' : 'Applied - Awaiting Client Choice'}
+            </Button>
+          ) : (
+            <Button
+              mode="contained"
+              icon="hand-pointing-right"
+              onPress={handleApply}
+              loading={updating}
+              disabled={updating}
+              buttonColor={theme.colors.primary}
+              textColor={colors.white}
+              style={styles.actionBtn}
+              contentStyle={styles.actionBtnContent}
+              labelStyle={styles.actionBtnLabel}
+            >
+              Apply for Job
+            </Button>
+          )
+        )}
+
+        {/* Primary status transition (only for hired cleaner) */}
+        {isAssignedToMe && transition && (
           <Button
             mode="contained"
             icon={transition.icon}
@@ -196,27 +291,13 @@ export default function JobDetailScreen() {
           </Button>
         )}
 
-        {/* Decline (only for unassigned) */}
-        {isUnassigned && (
-          <Button
-            mode="outlined"
-            icon="close"
-            onPress={handleDecline}
-            textColor={colors.error}
-            style={[styles.actionBtn, { borderColor: colors.error }]}
-            disabled={updating}
-          >
-            Decline
-          </Button>
-        )}
-
         {/* Chat */}
-        {canChat && booking.cleaner_id && (
+        {canChat && (
           <Button
             mode="contained"
             icon="chat"
             onPress={() => router.push(`/(cleaner)/jobs/${booking.id}/chat` as never)}
-            buttonColor={colors.secondary}
+            buttonColor={theme.colors.secondary}
             textColor={colors.white}
             style={styles.actionBtn}
           >
@@ -230,43 +311,93 @@ export default function JobDetailScreen() {
             mode="outlined"
             icon="camera"
             onPress={() => router.push(`/(cleaner)/jobs/${booking.id}/photos` as never)}
-            textColor={colors.primary}
+            textColor={theme.colors.primary}
             style={styles.actionBtn}
           >
             Upload Photos
           </Button>
         )}
+
+        {/* Cancel Booking */}
+        {canCancel && (
+          <Button
+            mode="outlined"
+            icon="close-circle"
+            onPress={() => setShowCancelDialog(true)}
+            textColor={theme.colors.error}
+            style={[styles.actionBtn, { borderColor: theme.colors.error }]}
+          >
+            Cancel Booking
+          </Button>
+        )}
       </View>
+
+      <Portal>
+        <Dialog visible={showCancelDialog} onDismiss={() => setShowCancelDialog(false)} style={{ backgroundColor: theme.colors.surfaceVariant }}>
+          <Dialog.Title style={{ color: theme.colors.onSurface }}>Cancel Booking</Dialog.Title>
+          <Dialog.Content>
+            <Text style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }} variant="bodyMedium">
+              Please select a reason for cancelling this booking:
+            </Text>
+            {['Illness', 'Emergency', 'Safety Concern', 'Transportation Issue', 'Other'].map((reason) => (
+              <View key={reason} style={styles.dialogRadioRow}>
+                <RadioButton
+                  value={reason}
+                  status={cancelReason === reason ? 'checked' : 'unchecked'}
+                  onPress={() => setCancelReason(reason)}
+                  color={theme.colors.primary}
+                  uncheckedColor={theme.colors.onSurfaceVariant}
+                />
+                <Text style={{ color: theme.colors.onSurface, marginLeft: 8 }}>{reason}</Text>
+              </View>
+            ))}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowCancelDialog(false)} textColor={theme.colors.onSurfaceVariant}>
+              Go Back
+            </Button>
+            <Button onPress={handleCancelJob} textColor={theme.colors.error} loading={updating} disabled={updating}>
+              Confirm Cancel
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </ScrollView>
   );
 }
 
 function DetailRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  const theme = useTheme();
   return (
     <View style={detailStyles.row}>
-      <Text style={detailStyles.label} variant="bodySmall">{label}</Text>
-      <Text style={[detailStyles.value, highlight && { color: colors.primary }]} variant="bodyMedium">{value}</Text>
+      <Text style={[detailStyles.label, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">{label}</Text>
+      <Text style={[detailStyles.value, { color: theme.colors.onSurface }, highlight && { color: theme.colors.primary }]} variant="bodyMedium">{value}</Text>
     </View>
   );
 }
 
 const detailStyles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-  label: { color: colors.onSurfaceVariant },
-  value: { color: colors.white, fontWeight: '600', flex: 1, textAlign: 'right' },
+  label: {},
+  value: { fontWeight: '600', flex: 1, textAlign: 'right' },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg },
   statusRow: { alignItems: 'flex-start' },
-  card: { backgroundColor: colors.surfaceVariant, borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.outline },
-  serviceName: { color: colors.white, fontWeight: '700', marginBottom: spacing.xs },
-  subTitle: { color: colors.onSurfaceVariant, marginBottom: spacing.xs },
-  divider: { backgroundColor: colors.outline, marginVertical: spacing.sm },
-  clientName: { color: colors.white, fontWeight: '700' },
+  card: { borderRadius: borderRadius.lg, borderWidth: 1 },
+  serviceName: { fontWeight: '700', marginBottom: spacing.xs },
+  subTitle: { marginBottom: spacing.xs },
+  divider: { marginVertical: spacing.sm },
+  clientName: { fontWeight: '700' },
   actions: { gap: spacing.md },
   actionBtn: { borderRadius: 12 },
   actionBtnContent: { paddingVertical: 6 },
   actionBtnLabel: { fontSize: 16, fontWeight: '700' },
+  dialogRadioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
 });

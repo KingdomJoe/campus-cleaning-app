@@ -1,15 +1,17 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, TextInput } from 'react-native-paper';
+import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Alert, Image } from 'react-native';
+import { Text, TextInput, useTheme } from 'react-native-paper';
 import { useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { fetchMessages, sendMessage, fetchNewMessages } from '@/lib/api/messages';
+import { pickImage, takePhoto, uploadImage } from '@/lib/api/uploads';
 import type { Message } from '@/lib/database.types';
 import { colors, spacing } from '@/lib/theme';
 
 export default function CleanerChatScreen() {
   const { id: bookingId } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore((s) => s.user);
+  const theme = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -43,7 +45,7 @@ export default function CleanerChatScreen() {
     if (!lastTimestamp) return;
     const newMsgs = await fetchNewMessages(bookingId!, lastTimestamp);
     if (newMsgs.length > 0) {
-      setMessages((prev) => [...prev, ...newMsgs]);
+      setMessages((prev: Message[]) => [...prev, ...newMsgs]);
     }
   };
 
@@ -52,11 +54,61 @@ export default function CleanerChatScreen() {
     setSending(true);
     const msg = await sendMessage(bookingId, user.id, input.trim());
     if (msg) {
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev: Message[]) => [...prev, msg]);
       setInput('');
       setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
     }
     setSending(false);
+  };
+
+  const handlePickImage = async () => {
+    Alert.alert(
+      'Send Image',
+      'Choose an option:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            const uri = await takePhoto({ aspect: [4, 3], quality: 0.8 });
+            if (uri) uploadAndSendMessage(uri);
+          },
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: async () => {
+            const uri = await pickImage({ aspect: [4, 3], quality: 0.8 });
+            if (uri) uploadAndSendMessage(uri);
+          },
+        },
+      ]
+    );
+  };
+
+  const uploadAndSendMessage = async (uri: string) => {
+    if (!user?.id || !bookingId) return;
+    setSending(true);
+    try {
+      const publicUrl = await uploadImage(
+        uri,
+        'booking-photos',
+        `chats/${bookingId}/${Date.now()}.jpg`
+      );
+      if (publicUrl) {
+        const msg = await sendMessage(bookingId, user.id, '[Image]', publicUrl);
+        if (msg) {
+          setMessages((prev: Message[]) => [...prev, msg]);
+          setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
+        }
+      } else {
+        Alert.alert('Error', 'Failed to upload image.');
+      }
+    } catch (err) {
+      console.error('Error sending image:', err);
+      Alert.alert('Error', 'Failed to send image.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const renderMessage = useCallback(
@@ -69,16 +121,25 @@ export default function CleanerChatScreen() {
               {(item.sender as { full_name?: string })?.full_name ?? 'Client'}
             </Text>
           )}
-          <Text style={[msgStyles.text, isMe ? msgStyles.myText : msgStyles.theirText]}>
-            {item.message}
-          </Text>
-          <Text style={msgStyles.time} variant="labelSmall">
+          {item.image_url && (
+            <Image
+              source={{ uri: item.image_url }}
+              style={msgStyles.image}
+              resizeMode="cover"
+            />
+          )}
+          {item.message && item.message !== '[Image]' && (
+            <Text style={[msgStyles.text, isMe ? msgStyles.myText : msgStyles.theirText]}>
+              {item.message}
+            </Text>
+          )}
+          <Text style={[msgStyles.time, { color: isMe ? 'rgba(255,255,255,0.6)' : theme.colors.onSurfaceVariant }]} variant="labelSmall">
             {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
       );
     },
-    [user?.id]
+    [user?.id, theme]
   );
 
   return (
@@ -107,6 +168,13 @@ export default function CleanerChatScreen() {
           textColor={colors.onSurface}
           theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
           dense
+          left={
+            <TextInput.Icon
+              icon="camera"
+              color={colors.primary}
+              onPress={handlePickImage}
+            />
+          }
           right={
             <TextInput.Icon
               icon="send"
@@ -130,6 +198,12 @@ const msgStyles = StyleSheet.create({
   myText: { color: colors.white },
   theirText: { color: colors.onSurface },
   time: { color: 'rgba(255,255,255,0.5)', alignSelf: 'flex-end', marginTop: 4, fontSize: 10 },
+  image: {
+    width: 200,
+    height: 150,
+    borderRadius: 8,
+    marginVertical: 4,
+  },
 });
 
 const styles = StyleSheet.create({

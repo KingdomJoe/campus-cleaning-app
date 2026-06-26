@@ -7,6 +7,7 @@ import { useBookingStore } from '@/stores/bookingStore';
 import BookingCard from '@/components/BookingCard';
 import EmptyState from '@/components/EmptyState';
 import LoadingScreen from '@/components/LoadingScreen';
+import { supabase } from '@/lib/supabase';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 
 export default function JobsListScreen() {
@@ -16,28 +17,65 @@ export default function JobsListScreen() {
   const [tab, setTab] = useState('available');
   const theme = useTheme();
 
+  const [documents, setDocuments] = useState<Record<string, string | null>>({
+    ghana_card: null,
+    student_id: null,
+    selfie: null,
+  });
+
   useEffect(() => {
     if (profile?.id) {
       fetchCleanerJobs(profile.id);
       fetchAvailableJobs();
+      loadDocuments();
     }
   }, [profile?.id]);
 
+  const loadDocuments = async () => {
+    if (!profile?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('cleaner_documents')
+        .select('document_type, file_url')
+        .eq('cleaner_id', profile.id);
+
+      if (error) throw error;
+
+      const docsMap: Record<string, string | null> = {
+        ghana_card: null,
+        student_id: null,
+        selfie: null,
+      };
+
+      data?.forEach((doc) => {
+        docsMap[doc.document_type] = doc.file_url;
+      });
+
+      setDocuments(docsMap);
+    } catch (err) {
+      console.error('Error loading documents in jobs screen:', err);
+    }
+  };
+
   if (isLoading) return <LoadingScreen message="Loading jobs..." />;
 
-  // Calculate Profile Completion Percentage
+  // Calculate Profile Completion Percentage (15% per section, 10% for selfie)
   const hasPhoto = !!profile?.avatar_url;
   const hasBio = !!cleanerProfile?.bio?.trim();
   const hasMomo = !!cleanerProfile?.mobile_money_number?.trim();
   const hasSkills = !!(cleanerProfile?.skills && cleanerProfile.skills.length > 0);
   const hasGuarantor = !!(cleanerProfile?.guarantor_name?.trim() && cleanerProfile?.guarantor_phone?.trim());
+  const hasGhanaCard = !!documents.ghana_card;
+  const hasSelfie = !!documents.selfie;
 
   let completionPct = 0;
-  if (hasPhoto) completionPct += 20;
-  if (hasBio) completionPct += 20;
-  if (hasMomo) completionPct += 20;
-  if (hasSkills) completionPct += 20;
-  if (hasGuarantor) completionPct += 20;
+  if (hasPhoto) completionPct += 15;
+  if (hasBio) completionPct += 15;
+  if (hasMomo) completionPct += 15;
+  if (hasSkills) completionPct += 15;
+  if (hasGuarantor) completionPct += 15;
+  if (hasGhanaCard) completionPct += 15;
+  if (hasSelfie) completionPct += 10;
 
   const isProfileIncomplete = completionPct < 100;
   const verificationStatus = cleanerProfile?.verification_status ?? 'pending';
@@ -59,7 +97,7 @@ export default function JobsListScreen() {
               <Text style={[styles.blockTitle, { color: theme.colors.onSurface }]} variant="titleLarge">
                 Complete Your Profile
               </Text>
-              <Text style={styles.blockDesc} variant="bodyMedium">
+              <Text style={[styles.blockDesc, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">
                 Before you can start accepting jobs, your cleaner profile must be 100% complete and approved by the admin team.
               </Text>
 
@@ -72,11 +110,13 @@ export default function JobsListScreen() {
               </View>
 
               <View style={styles.checklist}>
-                <Text style={styles.checkItem} variant="bodyMedium">{hasPhoto ? '✅' : '❌'} Profile Photo</Text>
-                <Text style={styles.checkItem} variant="bodyMedium">{hasBio ? '✅' : '❌'} Short Bio</Text>
-                <Text style={styles.checkItem} variant="bodyMedium">{hasMomo ? '✅' : '❌'} Mobile Money Number</Text>
-                <Text style={styles.checkItem} variant="bodyMedium">{hasSkills ? '✅' : '❌'} Professional Skills</Text>
-                <Text style={styles.checkItem} variant="bodyMedium">{hasGuarantor ? '✅' : '❌'} Guarantor Details</Text>
+                <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">{hasPhoto ? '✅' : '❌'} Profile Photo</Text>
+                <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">{hasBio ? '✅' : '❌'} Short Bio</Text>
+                <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">{hasMomo ? '✅' : '❌'} Mobile Money Number</Text>
+                <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">{hasSkills ? '✅' : '❌'} Professional Skills</Text>
+                <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">{hasGuarantor ? '✅' : '❌'} Guarantor Details</Text>
+                <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">{hasGhanaCard ? '✅' : '❌'} Ghana Card Document</Text>
+                <Text style={[styles.checkItem, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">{hasSelfie ? '✅' : '❌'} Selfie Verification</Text>
               </View>
 
               <Button
@@ -102,7 +142,7 @@ export default function JobsListScreen() {
               <Text style={[styles.blockTitle, { color: theme.colors.onSurface }]} variant="titleLarge">
                 {verificationStatus === 'rejected' ? 'Verification Rejected' : 'Awaiting Verification'}
               </Text>
-              <Text style={styles.blockDesc} variant="bodyMedium">
+              <Text style={[styles.blockDesc, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">
                 {verificationStatus === 'rejected'
                   ? 'Your profile verification details were rejected. Please review and update your work details in the Profile tab or contact support.'
                   : 'Your profile is 100% complete and is currently under review by our admin team. You will be able to accept jobs as soon as you are verified.'}
@@ -146,7 +186,7 @@ export default function JobsListScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <SegmentedButtons
         value={tab}
         onValueChange={setTab}
@@ -186,7 +226,7 @@ export default function JobsListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   segment: { marginHorizontal: spacing.lg, marginVertical: spacing.md },
   segBtn: { borderColor: colors.outline },
   list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl },
@@ -197,11 +237,11 @@ const styles = StyleSheet.create({
   blockCardContent: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.md },
   blockIcon: { fontSize: 48, marginBottom: spacing.xs },
   blockTitle: { fontWeight: '700', textAlign: 'center' },
-  blockDesc: { color: colors.onSurfaceVariant, textAlign: 'center', lineHeight: 22, paddingHorizontal: spacing.xs },
+  blockDesc: { textAlign: 'center', lineHeight: 22, paddingHorizontal: spacing.xs },
   gaugeSection: { width: '100%', marginTop: spacing.md, gap: spacing.xs },
   gaugeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   progressBar: { height: 8, borderRadius: 4 },
   checklist: { width: '100%', gap: spacing.xs, marginVertical: spacing.md, paddingLeft: spacing.sm },
-  checkItem: { color: colors.onSurfaceVariant },
+  checkItem: {},
   blockBtn: { width: '100%', borderRadius: 12, marginTop: spacing.sm },
 });
