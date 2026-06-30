@@ -70,7 +70,7 @@ CREATE POLICY "Cleaners can upload documents"
 -- ============================================================
 CREATE POLICY "Anyone can view service types"
   ON service_types FOR SELECT
-  TO authenticated
+  TO anon, authenticated
   USING (true);
 
 -- ============================================================
@@ -93,7 +93,8 @@ CREATE POLICY "Clients can create bookings"
 CREATE POLICY "Booking participants can update bookings"
   ON bookings FOR UPDATE
   TO authenticated
-  USING (auth.uid() = client_id OR auth.uid() = cleaner_id);
+  USING (auth.uid() = client_id OR auth.uid() = cleaner_id)
+  WITH CHECK (auth.uid() = client_id OR auth.uid() = cleaner_id);
 
 -- ============================================================
 -- BOOKING PHOTOS

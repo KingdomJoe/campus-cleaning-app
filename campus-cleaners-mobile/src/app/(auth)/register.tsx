@@ -219,7 +219,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   title: {
-    color: colors.white,
     fontWeight: '700',
   },
   subtitle: {

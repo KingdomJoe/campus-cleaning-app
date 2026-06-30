@@ -212,6 +212,11 @@ CREATE INDEX IF NOT EXISTS idx_payments_booking ON payments(booking_id);
 
 -- ============================================================
 -- FUNCTION: Auto-create profile on user signup
+-- NOTE: SECURITY DEFINER is required because this trigger runs as the
+-- auth user creation event, but the function inserts into public.profiles.
+-- Risk: If compromised, this function can bypass RLS. Mitigate by:
+--   1. Ensuring only the trigger (owned by supabase_admin) can call it
+--   2. REVOKE EXECUTE FROM public; GRANT EXECUTE TO supabase_admin ONLY;
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
