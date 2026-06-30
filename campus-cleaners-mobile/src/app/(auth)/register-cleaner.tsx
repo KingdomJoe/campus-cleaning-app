@@ -3,7 +3,6 @@ import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Image, Al
 import { Text, TextInput, Button, Chip, SegmentedButtons, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
-import * as SecureStore from 'expo-secure-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -38,6 +37,7 @@ export default function RegisterCleanerScreen() {
   // Prefill details if Google OAuth has established a session
   useEffect(() => {
     if (session && profile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (profile.full_name) setFullName(profile.full_name);
       if (profile.email) setEmail(profile.email);
       if (profile.phone) setPhone(profile.phone);
@@ -176,7 +176,12 @@ export default function RegisterCleanerScreen() {
     setIsLoading(true);
 
     try {
-      await SecureStore.setItemAsync('registration_role', 'cleaner');
+      if (Platform.OS === 'web') {
+        localStorage.setItem('registration_role', 'cleaner');
+      } else {
+        const SecureStore = require('expo-secure-store');
+        await SecureStore.setItemAsync('registration_role', 'cleaner');
+      }
       const success = await signInWithGoogle();
       if (success) {
         await fetchProfile();
@@ -393,7 +398,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   title: {
-    color: colors.white,
     fontWeight: '700',
   },
   subtitle: {

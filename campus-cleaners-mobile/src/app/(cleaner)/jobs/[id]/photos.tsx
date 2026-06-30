@@ -13,10 +13,6 @@ export default function PhotosScreen() {
   const [photos, setPhotos] = useState<BookingPhoto[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
-    loadPhotos();
-  }, [bookingId]);
-
   const loadPhotos = async () => {
     if (!bookingId) return;
     const { data } = await supabase
@@ -27,6 +23,12 @@ export default function PhotosScreen() {
     // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
     if (data) setPhotos(data);
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadPhotos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId]);
 
   const handleUpload = async (type: 'before' | 'after', source: 'camera' | 'gallery') => {
     if (!bookingId) return;

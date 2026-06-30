@@ -21,6 +21,7 @@ export default function ClientLocationSettings() {
     // Parse postal name if it was stored inside location
     if (profile?.location && profile.location.includes(' | Postal: ')) {
       const parts = profile.location.split(' | Postal: ');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAddress(parts[0]);
       setPostalName(parts[1]);
     }

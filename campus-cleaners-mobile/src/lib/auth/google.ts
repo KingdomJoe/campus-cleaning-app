@@ -1,34 +1,40 @@
+import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
-/**
- * Performs the Google OAuth flow on native/web platforms.
- * Opens the in-app WebBrowser, triggers OAuth, and establishes the Supabase session on return.
- */
+function getRedirectUrl(): string {
+  if (Platform.OS === 'web') {
+    return `${window.location.origin}/auth/callback`;
+  }
+  return Linking.createURL('/auth/callback');
+}
+
 export async function signInWithGoogle(): Promise<boolean> {
   try {
-    const redirectUrl = Linking.createURL('/auth/callback');
+    const redirectUrl = getRedirectUrl();
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
-        skipBrowserRedirect: false, // Use default browser redirect for better compatibility
+        skipBrowserRedirect: false,
       },
     });
 
     if (error) throw error;
     if (!data?.url) throw new Error('No authentication URL returned from Supabase.');
 
+    if (Platform.OS === 'web') {
+      window.location.href = data.url;
+      return false;
+    }
+
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
 
     if (result.type === 'success' && result.url) {
-      console.log('OAuth callback URL:', result.url);
-      
-      // Parse tokens from URL (query params or hash fragment)
       const parsed = Linking.parse(result.url);
       const { access_token, refresh_token } = parsed.queryParams || {};
 
@@ -41,7 +47,6 @@ export async function signInWithGoogle(): Promise<boolean> {
         return true;
       }
 
-      // Check URL fragment (hash) which Supabase often uses for OAuth redirects
       const hash = result.url.split('#')[1] || result.url.split('?')[1];
       if (hash) {
         const params = Object.fromEntries(
@@ -57,7 +62,6 @@ export async function signInWithGoogle(): Promise<boolean> {
         }
       }
       
-      // Fallback: try to get session directly (Supabase may have set it via deep link)
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         return true;

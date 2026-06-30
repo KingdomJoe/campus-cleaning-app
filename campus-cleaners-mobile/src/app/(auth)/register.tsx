@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Pressable, Alert, ScrollView } from 'react-native';
+import { Platform, View, StyleSheet, Pressable, Alert, ScrollView } from 'react-native';
 import { Text, Card, Button, ActivityIndicator, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { signInWithGoogle } from '@/lib/auth/google';
@@ -20,8 +19,13 @@ export default function RegisterRoleScreen() {
     if (!selectedRole) return;
     setIsLoading(true);
     try {
-      // Store the selected role in SecureStore so the callback knows what to assign
-      await SecureStore.setItemAsync('registration_role', selectedRole);
+      // Store the selected role so the callback knows what to assign
+      if (Platform.OS === 'web') {
+        localStorage.setItem('registration_role', selectedRole);
+      } else {
+        const SecureStore = require('expo-secure-store');
+        await SecureStore.setItemAsync('registration_role', selectedRole);
+      }
       
       const success = await signInWithGoogle();
       if (success) {
@@ -136,7 +140,7 @@ export default function RegisterRoleScreen() {
               <Card.Content style={styles.cardContent}>
                 <Text style={styles.cardIcon}>🧹</Text>
                 <Text style={[styles.cardTitle, { color: theme.colors.onSurface }]} variant="titleLarge">
-                  I'm a cleaner
+                  {"I'm a cleaner"}
                 </Text>
                 <Text style={styles.cardDesc} variant="bodyMedium">
                   Join as a verified cleaner, accept jobs, earn money, and build your reputation on campus.
@@ -206,7 +210,6 @@ export default function RegisterRoleScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -271,7 +274,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   cardTitle: {
-    color: colors.white,
     fontWeight: '700',
   },
   cardDesc: {

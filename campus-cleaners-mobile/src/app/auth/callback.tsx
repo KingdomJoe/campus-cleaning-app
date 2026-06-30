@@ -1,8 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Platform, View, StyleSheet } from 'react-native';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -47,7 +46,13 @@ export default function AuthCallbackScreen() {
         await fetchProfile();
 
         const currentProfile = useAuthStore.getState().profile;
-        const storedRole = await SecureStore.getItemAsync('registration_role');
+        let storedRole: string | null = null;
+        if (Platform.OS === 'web') {
+          storedRole = localStorage.getItem('registration_role');
+        } else {
+          const SecureStore = require('expo-secure-store');
+          storedRole = await SecureStore.getItemAsync('registration_role');
+        }
         const validRole = (storedRole === 'client' || storedRole === 'cleaner') ? storedRole : null;
 
         if (validRole && activeSession?.user) {
@@ -67,7 +72,12 @@ export default function AuthCallbackScreen() {
               await fetchProfile();
             }
           }
-          await SecureStore.deleteItemAsync('registration_role');
+          if (Platform.OS === 'web') {
+            localStorage.removeItem('registration_role');
+          } else {
+            const SecureStore = require('expo-secure-store');
+            await SecureStore.deleteItemAsync('registration_role');
+          }
         }
 
         // Redirect directly to app screen based on role (bypass index.tsx routing race condition)

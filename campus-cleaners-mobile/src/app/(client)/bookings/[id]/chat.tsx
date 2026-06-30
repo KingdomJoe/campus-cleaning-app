@@ -18,20 +18,6 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    if (!bookingId) return;
-    loadMessages();
-
-    // 3-second polling
-    pollingRef.current = setInterval(() => {
-      pollNewMessages();
-    }, 3000);
-
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [bookingId]);
-
   const loadMessages = async () => {
     const data = await fetchMessages(bookingId!);
     setMessages(data);
@@ -50,6 +36,22 @@ export default function ChatScreen() {
       setMessages((prev) => [...prev, ...newMsgs]);
     }
   };
+
+  useEffect(() => {
+    if (!bookingId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadMessages();
+
+    // 3-second polling
+    pollingRef.current = setInterval(() => {
+      pollNewMessages();
+    }, 3000);
+
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId]);
 
   const handleSend = async () => {
     if (!input.trim() || !user?.id || !bookingId) return;

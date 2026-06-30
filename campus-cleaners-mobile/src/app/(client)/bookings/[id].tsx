@@ -23,10 +23,6 @@ export default function BookingDetailScreen() {
   const [loadingApps, setLoadingApps] = useState(false);
   const [photos, setPhotos] = useState<any[]>([]);
 
-  useEffect(() => {
-    loadBooking();
-  }, [id]);
-
   const loadBooking = async () => {
     if (!id) return;
     setIsLoading(true);
@@ -69,6 +65,12 @@ export default function BookingDetailScreen() {
     
     setIsLoading(false);
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadBooking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (isLoading) return <LoadingScreen />;
   if (!booking) return <LoadingScreen message="Booking not found" />;

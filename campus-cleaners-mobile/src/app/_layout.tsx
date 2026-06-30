@@ -56,7 +56,7 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name="index" />
-          <Stack.Screen name="auth" options={{ animation: "fade" }} />
+          <Stack.Screen name="auth/callback" options={{ animation: "fade" }} />
           <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
           <Stack.Screen name="(client)" options={{ animation: "fade" }} />
           <Stack.Screen name="(cleaner)" options={{ animation: "fade" }} />

@@ -33,10 +33,6 @@ export default function JobDetailScreen() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState('Emergency');
 
-  useEffect(() => {
-    loadBooking();
-  }, [id]);
-
   const loadBooking = async () => {
     if (!id) return;
     setIsLoading(true);
@@ -75,6 +71,12 @@ export default function JobDetailScreen() {
 
     setIsLoading(false);
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadBooking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const handleApply = async () => {
     if (!booking || !profile) return;

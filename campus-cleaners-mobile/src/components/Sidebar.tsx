@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Pressable, Animated, Easing } from "react-native";
+import { View, StyleSheet, TouchableWithoutFeedback, Animated, Easing } from "react-native";
 import { Text, Avatar, Divider, useTheme } from "react-native-paper";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { useAuthStore } from "@/stores/authStore";
 import { colors, spacing, borderRadius } from "@/lib/theme";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -41,8 +41,7 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose, userRole }: SidebarProps) {
   const theme = useTheme();
   const { profile, signOut } = useAuthStore();
-  const { pathname } = useLocalSearchParams();
-  const currentPath = pathname as string;
+  const currentPath = usePathname();
 
   const navItems = userRole === "client" ? CLIENT_NAV_ITEMS : CLEANER_NAV_ITEMS;
 
@@ -71,26 +70,40 @@ export default function Sidebar({ isOpen, onClose, userRole }: SidebarProps) {
   const firstName = profile?.full_name?.split(" ")[0] ?? "User";
   const roleLabel = userRole === "client" ? "🏠 Client" : "🧹 Cleaner";
 
+  // Check if a nav item is the active route
+  const isNavActive = (href: string) => {
+    if (!currentPath) return false;
+    // Exact match or starts-with for nested routes
+    return currentPath === href || currentPath.startsWith(href + "/");
+  };
+
   return (
     <>
-      <Pressable
-        style={[
-          styles.overlay,
-          {
-            opacity: anim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 0.5],
-            }),
-          },
-        ]}
-        pointerEvents={isOpen ? "auto" : "none"}
-        onPress={onClose}
-        accessibilityRole="button"
-      />
+      {/* Overlay backdrop — only rendered when open */}
+      {isOpen && (
+        <TouchableWithoutFeedback onPress={onClose} accessibilityRole="button">
+          <Animated.View
+            style={[
+              styles.overlay,
+              {
+                opacity: anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.5],
+                }),
+              },
+            ]}
+          />
+        </TouchableWithoutFeedback>
+      )}
+
+      {/* Drawer panel */}
       <Animated.View
+        pointerEvents={isOpen ? "auto" : "none"}
         style={[
           styles.drawer,
           {
+            backgroundColor: theme.colors.surface,
+            borderRightColor: theme.colors.outline,
             transform: [
               {
                 translateX: anim.interpolate({
@@ -102,11 +115,11 @@ export default function Sidebar({ isOpen, onClose, userRole }: SidebarProps) {
           },
         ]}
       >
-        <View style={styles.drawerHeader}>
+        <View style={[styles.drawerHeader, { backgroundColor: theme.colors.primaryContainer, borderBottomColor: theme.colors.outline }]}>
           <Avatar.Text
             size={56}
             label={firstName.charAt(0)}
-            style={styles.avatar}
+            style={[styles.avatar, { backgroundColor: theme.colors.primary }]}
             color={colors.white}
           />
           <View style={styles.headerInfo}>
@@ -123,58 +136,57 @@ export default function Sidebar({ isOpen, onClose, userRole }: SidebarProps) {
 
         <View style={styles.navList}>
           {navItems.map((item) => {
-            const isActive = currentPath === item.href;
+            const active = isNavActive(item.href);
             return (
-              <Pressable
+              <TouchableWithoutFeedback
                 key={item.href}
-                style={[
-                  styles.navItem,
-                  isActive && styles.navItemActive,
-                  { backgroundColor: isActive ? theme.colors.primaryContainer : "transparent" },
-                ]}
                 onPress={() => handleNavPress(item.href)}
-                android_ripple={{ color: theme.colors.primary + "20" }}
               >
-                <MaterialCommunityIcons
-                  name={item.icon as any}
-                  size={24}
-                  color={isActive ? theme.colors.primary : theme.colors.onSurfaceVariant}
-                  style={styles.navIcon}
-                />
-                <Text
+                <View
                   style={[
-                    styles.navLabel,
-                    { color: isActive ? theme.colors.primary : theme.colors.onSurface },
-                    isActive && { fontWeight: "600" },
+                    styles.navItem,
+                    active && { backgroundColor: theme.colors.primaryContainer },
                   ]}
-                  variant="bodyMedium"
                 >
-                  {item.label}
-                </Text>
-              </Pressable>
+                  <MaterialCommunityIcons
+                    name={item.icon as any}
+                    size={24}
+                    color={active ? theme.colors.primary : theme.colors.onSurfaceVariant}
+                    style={styles.navIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.navLabel,
+                      { color: active ? theme.colors.primary : theme.colors.onSurface },
+                      active && { fontWeight: "600" },
+                    ]}
+                    variant="bodyMedium"
+                  >
+                    {item.label}
+                  </Text>
+                </View>
+              </TouchableWithoutFeedback>
             );
           })}
         </View>
 
         <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
 
-        <Pressable
-          style={styles.signOutItem}
-          onPress={handleSignOut}
-          android_ripple={{ color: theme.colors.error + "20" }}
-        >
-          <MaterialCommunityIcons
-            name="logout" as any
-            size={24}
-            color={theme.colors.error}
-            style={styles.navIcon}
-          />
-          <Text style={[styles.navLabel, { color: theme.colors.error }]} variant="bodyMedium">
-            Sign Out
-          </Text>
-        </Pressable>
+        <TouchableWithoutFeedback onPress={handleSignOut}>
+          <View style={styles.signOutItem}>
+            <MaterialCommunityIcons
+              name={"logout" as any}
+              size={24}
+              color={theme.colors.error}
+              style={styles.navIcon}
+            />
+            <Text style={[styles.navLabel, { color: theme.colors.error }]} variant="bodyMedium">
+              Sign Out
+            </Text>
+          </View>
+        </TouchableWithoutFeedback>
 
-        <View style={styles.versionInfo}>
+        <View style={[styles.versionInfo, { borderTopColor: theme.colors.outline }]}>
           <Text style={[styles.versionText, { color: theme.colors.onSurfaceVariant }]} variant="bodySmall">
             Campus Cleaners v1.0.0
           </Text>
@@ -191,7 +203,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.black,
+    backgroundColor: "#000",
+    zIndex: 90,
   },
   drawer: {
     position: "absolute",
@@ -199,14 +212,13 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     width: 280,
-    backgroundColor: colors.surface,
     borderRightWidth: 1,
-    borderRightColor: colors.outline,
-    shadowColor: colors.black,
+    shadowColor: "#000",
     shadowOffset: { width: 4, height: 0 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 16,
+    zIndex: 100,
   },
   drawerHeader: {
     flexDirection: "row",
@@ -214,12 +226,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.lg,
     paddingTop: spacing.xl + 20, // Account for status bar
-    backgroundColor: colors.primaryContainer,
     borderBottomWidth: 1,
-    borderBottomColor: colors.outline,
   },
   avatar: {
-    backgroundColor: colors.primary,
+    // backgroundColor set inline
   },
   headerInfo: {
     flex: 1,
@@ -248,9 +258,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     marginHorizontal: spacing.md,
   },
-  navItemActive: {
-    // backgroundColor handled inline
-  },
   navIcon: {
     width: 28,
     textAlign: "center",
@@ -272,7 +279,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: colors.outline,
   },
   versionText: {
     fontSize: 12,

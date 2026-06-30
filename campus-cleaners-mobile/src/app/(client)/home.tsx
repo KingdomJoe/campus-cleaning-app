@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import type { ServiceType } from "@/lib/database.types";
 import BookingCard from "@/components/BookingCard";
 import EmptyState from "@/components/EmptyState";
-import { colors, spacing, borderRadius } from "@/lib/theme";
+import { spacing, borderRadius } from "@/lib/theme";
 
 export default function ClientHomeScreen() {
   const theme = useTheme();
@@ -57,7 +57,7 @@ export default function ClientHomeScreen() {
   const renderServiceSection = (
     title: string,
     icon: string,
-    services: ServiceType[],
+    sectionServices: ServiceType[],
     category: "cleaning" | "laundry",
     iconMap: Record<string, string>
   ) => {
@@ -68,9 +68,9 @@ export default function ClientHomeScreen() {
             <View key={i} style={styles.serviceCard}>
               <Card style={[styles.serviceCardInner, { backgroundColor: theme.colors.surfaceVariant }]} mode="contained">
                 <Card.Content style={styles.serviceContent}>
-                  <View style={[styles.serviceIcon, { backgroundColor: theme.colors.surfaceVariant }]} />
-                  <View style={[styles.skeleton, styles.skeletonText]} />
-                  <View style={[styles.skeleton, styles.skeletonPrice]} />
+                  <View style={[styles.skeletonIcon, { backgroundColor: theme.colors.outline }]} />
+                  <View style={[styles.skeleton, styles.skeletonText, { backgroundColor: theme.colors.outline }]} />
+                  <View style={[styles.skeleton, styles.skeletonPrice, { backgroundColor: theme.colors.outline }]} />
                 </Card.Content>
               </Card>
             </View>
@@ -92,7 +92,7 @@ export default function ClientHomeScreen() {
       );
     }
 
-    if (services.length === 0) {
+    if (sectionServices.length === 0) {
       return (
         <EmptyState
           icon={icon}
@@ -105,7 +105,7 @@ export default function ClientHomeScreen() {
 
     return (
       <View style={styles.serviceGrid}>
-        {services.map((service) => (
+        {sectionServices.map((service) => (
           <Pressable
             key={service.id}
             style={styles.serviceCard}
@@ -140,7 +140,7 @@ export default function ClientHomeScreen() {
                 >
                   {service.name}
                 </Text>
-                <Text style={styles.servicePrice} variant="bodySmall">
+                <Text style={[styles.servicePrice, { color: theme.colors.primary }]} variant="bodySmall">
                   From GH₵ {service.base_price}{category === "laundry" ? "/item" : ""}
                 </Text>
               </Card.Content>
@@ -158,7 +158,7 @@ export default function ClientHomeScreen() {
     >
       {/* Greeting */}
       <View style={styles.greeting}>
-        <View>
+        <View style={styles.greetingText}>
           <Text
             style={[styles.hello, { color: theme.colors.onSurfaceVariant }]}
             variant="bodyLarge"
@@ -175,8 +175,8 @@ export default function ClientHomeScreen() {
         <Avatar.Text
           size={44}
           label={firstName.charAt(0)}
-          style={styles.avatar}
-          color={colors.white}
+          style={[styles.avatar, { backgroundColor: theme.colors.primary }]}
+          color="#FFFFFF"
         />
       </View>
 
@@ -213,7 +213,7 @@ export default function ClientHomeScreen() {
           "🧹",
           cleaningServices,
           "cleaning",
-          { Express: "⚡", Deep: "🔥", "Move-In": "📦" }
+          { "Express Touch-Up": "⚡", "Deep Scrub": "🔥", "Move-In / Move-Out": "📦" }
         )}
       </View>
 
@@ -230,7 +230,7 @@ export default function ClientHomeScreen() {
           "👕",
           laundryServices,
           "laundry",
-          { Iron: "🔥", Wash: "🧺" }
+          { "Iron Only": "🔥", "Wash Only": "🧺", "Wash & Iron": "✨" }
         )}
       </View>
 
@@ -240,7 +240,7 @@ export default function ClientHomeScreen() {
         icon="magnify"
         onPress={() => router.push("/(client)/book")}
         textColor={theme.colors.primary}
-        style={styles.findBtn}
+        style={[styles.findBtn, { borderColor: theme.colors.primary }]}
       >
         Browse All Services
       </Button>
@@ -262,6 +262,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: spacing.lg,
   },
+  greetingText: {
+    flex: 1,
+  },
   hello: {
     // color determined dynamically
   },
@@ -270,7 +273,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   avatar: {
-    backgroundColor: colors.primaryDark,
+    // backgroundColor set inline via theme
   },
   section: {
     marginBottom: spacing.lg,
@@ -304,26 +307,27 @@ const styles = StyleSheet.create({
   serviceIcon: {
     fontSize: 32,
     marginBottom: spacing.xs,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    textAlign: "center",
   },
   serviceName: {
     fontWeight: "600",
     textAlign: "center",
   },
   servicePrice: {
-    color: colors.primary,
     fontWeight: "600",
   },
   findBtn: {
-    borderColor: colors.primary,
     borderRadius: 12,
     marginTop: spacing.md,
   },
   skeleton: {
-    backgroundColor: colors.outline,
     borderRadius: 4,
+  },
+  skeletonIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginBottom: spacing.xs,
   },
   skeletonText: {
     width: "80%",

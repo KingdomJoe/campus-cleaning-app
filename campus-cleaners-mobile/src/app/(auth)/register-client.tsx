@@ -15,7 +15,6 @@ import {
 } from "react-native-paper";
 import { router } from "expo-router";
 import * as Linking from "expo-linking";
-import * as SecureStore from "expo-secure-store";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
@@ -186,7 +185,12 @@ export default function RegisterClientScreen() {
     setIsLoading(true);
 
     try {
-      await SecureStore.setItemAsync("registration_role", "client");
+      if (Platform.OS === 'web') {
+        localStorage.setItem("registration_role", "client");
+      } else {
+        const SecureStore = require("expo-secure-store");
+        await SecureStore.setItemAsync("registration_role", "client");
+      }
       const success = await signInWithGoogle();
       if (success) {
         await fetchProfile();
@@ -413,7 +417,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   title: {
-    color: colors.white,
     fontWeight: "700",
   },
   subtitle: {

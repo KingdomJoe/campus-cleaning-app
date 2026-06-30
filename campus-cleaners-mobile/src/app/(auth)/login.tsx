@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Platform, View, StyleSheet, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { Text, TextInput, Button, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
-import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { signInWithGoogle } from '@/lib/auth/google';
@@ -24,9 +23,14 @@ export default function LoginScreen() {
     setError('');
     setIsLoading(true);
     try {
-      await SecureStore.deleteItemAsync('registration_role').catch(() => {});
       const success = await signInWithGoogle();
       if (success) {
+        if (Platform.OS === 'web') {
+          localStorage.removeItem('registration_role');
+        } else {
+          const SecureStore = require('expo-secure-store');
+          await SecureStore.deleteItemAsync('registration_role').catch(() => {});
+        }
         await fetchProfile();
       }
     } catch (err: unknown) {
@@ -221,7 +225,7 @@ export default function LoginScreen() {
           textColor={colors.primary}
           style={styles.linkBtn}
         >
-          Don't have an account? Register
+          {"Don't have an account? Register"}
         </Button>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -231,7 +235,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -241,7 +244,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   title: {
-    color: colors.white,
     fontWeight: '700',
   },
   subtitle: {

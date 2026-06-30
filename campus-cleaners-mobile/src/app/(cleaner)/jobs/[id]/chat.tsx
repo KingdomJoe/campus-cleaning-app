@@ -7,6 +7,7 @@ import { fetchMessages, sendMessage, fetchNewMessages } from '@/lib/api/messages
 import { pickImage, takePhoto, uploadImage } from '@/lib/api/uploads';
 import type { Message } from '@/lib/database.types';
 import { colors, spacing } from '@/lib/theme';
+import { supabase } from '@/lib/supabase';
 
 export default function CleanerChatScreen() {
   const { id: bookingId } = useLocalSearchParams<{ id: string }>();
@@ -17,19 +18,6 @@ export default function CleanerChatScreen() {
   const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (!bookingId) return;
-    loadMessages();
-
-    pollingRef.current = setInterval(() => {
-      pollNewMessages();
-    }, 3000);
-
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [bookingId]);
 
   const loadMessages = async () => {
     const data = await fetchMessages(bookingId!);
@@ -43,11 +31,32 @@ export default function CleanerChatScreen() {
     }
     const lastTimestamp = messages[messages.length - 1]?.created_at;
     if (!lastTimestamp) return;
-    const newMsgs = await fetchNewMessages(bookingId!, lastTimestamp);
-    if (newMsgs.length > 0) {
-      setMessages((prev: Message[]) => [...prev, ...newMsgs]);
+    const { data } = await supabase
+      .from('messages')
+      .select('*, sender:profiles(*)')
+      .eq('booking_id', bookingId!)
+      .gt('created_at', lastTimestamp)
+      .order('created_at', { ascending: true });
+
+    if (data && data.length > 0) {
+      setMessages((prev) => [...prev, ...(data as any[])]);
     }
   };
+
+  useEffect(() => {
+    if (!bookingId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadMessages();
+
+    pollingRef.current = setInterval(() => {
+      pollNewMessages();
+    }, 3000);
+
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId]);
 
   const handleSend = async () => {
     if (!input.trim() || !user?.id || !bookingId) return;
