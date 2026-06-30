@@ -67,7 +67,8 @@
         {
           "locationWhenInUsePermission": "Uber for Cleaning needs your location to find nearby cleaners."
         }
-      ]
+      ],
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true,
