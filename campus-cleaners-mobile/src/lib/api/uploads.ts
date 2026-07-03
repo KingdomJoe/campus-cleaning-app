@@ -62,9 +62,19 @@ export async function uploadImage(
   filePath: string
 ): Promise<string | null> {
   try {
-    // Read the file as a blob
-    const response = await fetch(localUri);
-    const blob = await response.blob();
+    // Read the file as a blob using XMLHttpRequest for maximum compatibility in React Native
+    const blob: Blob = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+        resolve(xhr.response);
+      };
+      xhr.onerror = function (e) {
+        reject(new Error('Failed to read local file: ' + JSON.stringify(e)));
+      };
+      xhr.responseType = 'blob';
+      xhr.open('GET', localUri, true);
+      xhr.send(null);
+    });
 
     // Determine the content type
     const extension = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';

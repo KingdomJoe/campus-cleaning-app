@@ -110,6 +110,36 @@ export default function LoginScreen() {
     }
   };
 
+  const quickLogin = async (testEmail: string, testPass: string) => {
+    setError('');
+    setIsLoading(true);
+    setEmail(testEmail);
+    setPassword(testPass);
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: testEmail,
+        password: testPass,
+      });
+      if (signInError) throw signInError;
+
+      // Successful password login, fetch profile and redirect
+      await fetchProfile();
+      const role = useAuthStore.getState().role;
+      if (!role) {
+        router.replace('/(auth)/register');
+      } else if (role === 'cleaner') {
+        router.replace('/(cleaner)/jobs');
+      } else {
+        router.replace('/(client)/home');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Authentication failed';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -219,6 +249,74 @@ export default function LoginScreen() {
           Continue with Google
         </Button>
 
+        <View style={[styles.testAccountsContainer, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outlineVariant }]}>
+          <Text style={[styles.testAccountsTitle, { color: theme.colors.primary }]} variant="titleSmall">
+            🔒 Quick Test Accounts
+          </Text>
+          <View style={styles.testAccountsGrid}>
+            <View style={styles.testAccountsCol}>
+              <Text style={[styles.testAccountRoleHeader, { color: theme.colors.onSurfaceVariant }]}>Clients</Text>
+              <Button
+                mode="text"
+                compact
+                onPress={() => quickLogin('client1@gmail.com', 'Password123!')}
+                style={styles.testAccountBtn}
+                textColor={theme.colors.primary}
+              >
+                Kwame (C1)
+              </Button>
+              <Button
+                mode="text"
+                compact
+                onPress={() => quickLogin('client2@gmail.com', 'Password123!')}
+                style={styles.testAccountBtn}
+                textColor={theme.colors.primary}
+              >
+                Abena (C2)
+              </Button>
+              <Button
+                mode="text"
+                compact
+                onPress={() => quickLogin('client3@gmail.com', 'Password123!')}
+                style={styles.testAccountBtn}
+                textColor={theme.colors.primary}
+              >
+                Kofi (C3)
+              </Button>
+            </View>
+            <View style={styles.testAccountsCol}>
+              <Text style={[styles.testAccountRoleHeader, { color: theme.colors.onSurfaceVariant }]}>Cleaners</Text>
+              <Button
+                mode="text"
+                compact
+                onPress={() => quickLogin('cleaner1@gmail.com', 'Password123!')}
+                style={styles.testAccountBtn}
+                textColor={theme.colors.primary}
+              >
+                Emmanuel (Cl1)
+              </Button>
+              <Button
+                mode="text"
+                compact
+                onPress={() => quickLogin('cleaner2@gmail.com', 'Password123!')}
+                style={styles.testAccountBtn}
+                textColor={theme.colors.primary}
+              >
+                Ama (Cl2)
+              </Button>
+              <Button
+                mode="text"
+                compact
+                onPress={() => quickLogin('cleaner3@gmail.com', 'Password123!')}
+                style={styles.testAccountBtn}
+                textColor={theme.colors.primary}
+              >
+                Yaw (Cl3)
+              </Button>
+            </View>
+          </View>
+        </View>
+
         <Button
           mode="text"
           onPress={() => router.push('/(auth)/register')}
@@ -301,5 +399,34 @@ const styles = StyleSheet.create({
   },
   googleBtnContent: {
     paddingVertical: 10,
+  },
+  testAccountsContainer: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  testAccountsTitle: {
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  testAccountsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  testAccountsCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  testAccountRoleHeader: {
+    fontWeight: '700',
+    fontSize: 12,
+    marginBottom: spacing.xs,
+  },
+  testAccountBtn: {
+    marginVertical: -4,
+    width: '100%',
   },
 });

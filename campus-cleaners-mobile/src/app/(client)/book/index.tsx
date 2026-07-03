@@ -22,15 +22,26 @@ export default function BookIndexScreen() {
       const { data, error: fetchError } = await supabase
         .from("service_types")
         .select("*")
-        .eq("is_active", true)
         .order("base_price");
       if (fetchError) throw fetchError;
-      // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
-      if (data) setServices(data);
+
+      if (data && data.length > 0) {
+        // Filter active services client-side for resilience
+        const activeServices = data.filter(
+          (s: any) => s.is_active === true || s.is_active === null || s.is_active === undefined
+        );
+        // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
+        setServices(activeServices.length > 0 ? activeServices : data);
+      } else {
+        setServices([]);
+        console.warn(
+          "[BookIndex] service_types table returned 0 rows. Ensure seed data has been applied."
+        );
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to load services";
       setError(message);
-      console.error("Error fetching services:", err);
+      console.error("[BookIndex] Error fetching services:", err);
     } finally {
       setLoading(false);
     }

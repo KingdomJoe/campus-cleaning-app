@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, TextInput, Button, Card, useTheme } from 'react-native-paper';
@@ -18,6 +19,7 @@ export default function ClientLocationSettings() {
 
   const [isLocating, setIsLocating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isScrollEnabled, setIsScrollEnabled] = useState(true);
 
   useEffect(() => {
     if (profile?.location && profile.location.includes(' | Postal: ')) {
@@ -32,29 +34,100 @@ export default function ClientLocationSettings() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Permission to access location was denied');
+        Alert.alert('Permission Denied', 'Permission to access location was denied. Please enable location services in your device settings.');
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      // Try high accuracy first, then fall back to balanced
+      let location;
+      try {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+      } catch {
+        console.warn('[GPS] High accuracy failed, falling back to Balanced...');
+        try {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        } catch {
+          console.warn('[GPS] Balanced accuracy failed, trying Low...');
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Low,
+          });
+        }
+      }
+
+      // Reverse geocode the location to get a user-friendly name
+      let addressName = '';
+      try {
+        const geocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        if (geocode && geocode.length > 0) {
+          const item = geocode[0];
+          const parts = [];
+          if (item.name) parts.push(item.name);
+          if (item.street) parts.push(item.street);
+          if (item.district) parts.push(item.district);
+          if (item.city) parts.push(item.city);
+          if (item.region) parts.push(item.region);
+          addressName = parts.filter(Boolean).join(', ');
+        }
+      } catch (geocodeErr) {
+        console.warn('[GPS] Reverse geocoding failed:', geocodeErr);
+      }
 
       setGpsCoords({
         lat: location.coords.latitude,
         lng: location.coords.longitude,
       });
-      Alert.alert('GPS Captured', `Lat: ${location.coords.latitude.toFixed(4)}, Lng: ${location.coords.longitude.toFixed(4)}`);
+
+      if (addressName) {
+        setAddress(addressName);
+      } else {
+        setAddress(`UCC Campus (${location.coords.latitude.toFixed(4)}, ${location.coords.longitude.toFixed(4)})`);
+      }
+
+      Alert.alert(
+        'GPS Captured',
+        `Lat: ${location.coords.latitude.toFixed(5)}, Lng: ${location.coords.longitude.toFixed(5)}\nAccuracy: ±${Math.round(location.coords.accuracy ?? 0)}m`,
+      );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Could not get location';
-      Alert.alert('GPS Error', message);
+      Alert.alert(
+        'GPS Error',
+        `Current location is unavailable. ${message}\n\nMake sure:\n• Location services are enabled\n• GPS/High accuracy mode is on\n• You are not indoors with no signal`,
+      );
     } finally {
       setIsLocating(false);
     }
   };
 
-  const handleMapChange = (lat: number, lng: number) => {
+  const handleMapChange = async (lat: number, lng: number) => {
     setGpsCoords({ lat, lng });
+    try {
+      const geocode = await Location.reverseGeocodeAsync({
+        latitude: lat,
+        longitude: lng,
+      });
+      if (geocode && geocode.length > 0) {
+        const item = geocode[0];
+        const parts = [];
+        if (item.name) parts.push(item.name);
+        if (item.street) parts.push(item.street);
+        if (item.district) parts.push(item.district);
+        if (item.city) parts.push(item.city);
+        if (item.region) parts.push(item.region);
+        const addressName = parts.filter(Boolean).join(', ');
+        if (addressName) {
+          setAddress(addressName);
+        }
+      }
+    } catch (err) {
+      console.warn('[Map] Reverse geocoding failed:', err);
+    }
   };
 
   const handleSave = async () => {
@@ -65,8 +138,9 @@ export default function ClientLocationSettings() {
 
     setIsSaving(true);
     try {
-      const user = useAuthStore.getState().user;
-      if (!user) throw new Error('User not authenticated');
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const userId = authUser?.id || profile?.id;
+      if (!userId) throw new Error('User not authenticated');
 
       const fullLocationString = postalName.trim()
         ? `${address.trim()} | Postal: ${postalName.trim()}`
@@ -78,7 +152,7 @@ export default function ClientLocationSettings() {
           location: fullLocationString,
           room_number: roomNumber.trim() || null,
         })
-        .eq('id', user.id);
+        .eq('id', userId);
 
       if (error) throw error;
 
@@ -99,7 +173,11 @@ export default function ClientLocationSettings() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView 
+        scrollEnabled={isScrollEnabled}
+        contentContainerStyle={styles.scrollContent} 
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.colors.onBackground }]} variant="headlineMedium">
             📍 Location Settings
@@ -178,6 +256,7 @@ export default function ClientLocationSettings() {
           latitude={gpsCoords?.lat ?? null}
           longitude={gpsCoords?.lng ?? null}
           onLocationChange={handleMapChange}
+          onMapInteraction={(interacting) => setIsScrollEnabled(!interacting)}
         />
 
         {isSaving ? (
@@ -240,9 +319,9 @@ const styles = StyleSheet.create({
   },
   input: {},
   gpsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
     marginTop: spacing.xs,
   },
   gpsBtn: {

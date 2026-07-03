@@ -1,3 +1,4 @@
+import 'expo-sqlite/localStorage/install';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 
@@ -12,6 +13,7 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
+    storage: localStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

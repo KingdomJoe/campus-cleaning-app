@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Booking, BookingStatus, LaundryItem } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 import { fetchBookingPayment, refundPayment } from '@/lib/api/payments';
+import { sendPushNotification } from '@/lib/notifications';
 
 interface BookingFormState {
   serviceCategory: 'cleaning' | 'laundry' | null;
@@ -197,7 +198,30 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
   createBooking: async (clientId, totalPrice) => {
     const { form } = get();
+    console.log('[BookingStore] createBooking called with:', { clientId, totalPrice, form });
     try {
+      // Validate required fields before attempting insert
+      if (!form.serviceTypeId) {
+        const err = new Error('Service type is required');
+        console.error('[BookingStore] Validation failed:', err.message);
+        throw err;
+      }
+      if (!form.location?.trim()) {
+        const err = new Error('Location is required');
+        console.error('[BookingStore] Validation failed:', err.message);
+        throw err;
+      }
+      if (!form.scheduledDate) {
+        const err = new Error('Scheduled date is required');
+        console.error('[BookingStore] Validation failed:', err.message);
+        throw err;
+      }
+      if (!form.scheduledTime) {
+        const err = new Error('Scheduled time is required');
+        console.error('[BookingStore] Validation failed:', err.message);
+        throw err;
+      }
+
       const insertData: Record<string, unknown> = {
         client_id: clientId,
         service_type_id: form.serviceTypeId,
@@ -218,13 +242,52 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         insertData.laundry_items = form.laundryItems;
       }
 
+      console.log('[BookingStore] Inserting booking data:', insertData);
+
       const { data, error } = await supabase
         .from('bookings')
         .insert(insertData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('[BookingStore] Supabase insert error:', error);
+        throw error;
+      }
+
+      console.log('[BookingStore] Booking created successfully:', data);
+      try {
+        const { data: cleaners } = await supabase
+          .from('profiles')
+          .select('id, push_token')
+          .eq('role', 'cleaner')
+          .eq('status', 'active');
+
+        if (cleaners && cleaners.length > 0) {
+          const notificationInserts = cleaners.map((cleaner) => ({
+            user_id: cleaner.id,
+            title: 'New Job Available! 🧹',
+            body: `A new ${form.serviceCategory === 'cleaning' ? 'Cleaning' : 'Laundry'} booking is available at ${form.location}.`,
+            data: { bookingId: data.id, role: 'cleaner' },
+            read: false,
+          }));
+          await supabase.from('notifications').insert(notificationInserts);
+
+          // Dispatch push notifications to each cleaner's device asynchronously to avoid blocking the UI
+          for (const cleaner of cleaners) {
+            if (cleaner.push_token) {
+              sendPushNotification(
+                cleaner.push_token,
+                'New Job Available! 🧹',
+                `A new ${form.serviceCategory === 'cleaning' ? 'Cleaning' : 'Laundry'} booking is available at ${form.location}.`,
+                { bookingId: data.id, role: 'cleaner' }
+              ).catch((err) => console.error('[Push] Async send failed:', err));
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error notifying cleaners of new job:', err);
+      }
 
       try {
         const { trackEvent } = await import('@/lib/analytics');
@@ -243,7 +306,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       return data;
     } catch (err) {
       console.error('Error creating booking:', err);
-      return null;
+      throw err;
     }
   },
 
@@ -346,6 +409,49 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
       if (error) throw error;
 
+      // Notify client of the booking in database and via push
+      try {
+        const { data: booking } = await supabase
+          .from('bookings')
+          .select('client_id, location, service_type:service_types(name)')
+          .eq('id', bookingId)
+          .single();
+
+        const { data: cleaner } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', cleanerId)
+          .single();
+
+        if (booking && cleaner) {
+          // @ts-expect-error - handle dynamic json typing or property access
+          const serviceName = booking.service_type?.name || 'your booking';
+          const title = 'New offer for your booking! 🧹';
+          const body = `${cleaner.full_name || 'A cleaner'} has applied for ${serviceName} at ${booking.location}.`;
+
+          await supabase.from('notifications').insert({
+            user_id: booking.client_id,
+            title,
+            body,
+            data: { bookingId, role: 'client' },
+            read: false,
+          });
+
+          // Fetch client's push token and send push notification
+          const { data: clientProfile } = await supabase
+            .from('profiles')
+            .select('push_token')
+            .eq('id', booking.client_id)
+            .single();
+
+          if (clientProfile?.push_token) {
+            await sendPushNotification(clientProfile.push_token, title, body, { bookingId, role: 'client' });
+          }
+        }
+      } catch (err) {
+        console.error('Error notifying client of application:', err);
+      }
+
       try {
         const { trackEvent } = await import('@/lib/analytics');
         trackEvent('bid_applied', { bookingId, cleanerId });
@@ -411,6 +517,49 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         .neq('id', appId);
 
       if (appDeclineError) throw appDeclineError;
+
+      // Notify the hired cleaner in database and via push
+      try {
+        const { data: booking } = await supabase
+          .from('bookings')
+          .select('location, client_id, service_type:service_types(name)')
+          .eq('id', bookingId)
+          .single();
+
+        if (booking) {
+          const { data: client } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', booking.client_id)
+            .single();
+
+          // @ts-expect-error - handle dynamic json typing or property access
+          const serviceName = booking.service_type?.name || 'the job';
+          const title = 'You have been hired! 🎉';
+          const body = `${client?.full_name || 'A client'} has hired you for ${serviceName} at ${booking.location}.`;
+
+          await supabase.from('notifications').insert({
+            user_id: cleanerId,
+            title,
+            body,
+            data: { bookingId, role: 'cleaner' },
+            read: false,
+          });
+
+          // Fetch cleaner's push token and send push notification
+          const { data: cleanerProfile } = await supabase
+            .from('profiles')
+            .select('push_token')
+            .eq('id', cleanerId)
+            .single();
+
+          if (cleanerProfile?.push_token) {
+            await sendPushNotification(cleanerProfile.push_token, title, body, { bookingId, role: 'cleaner' });
+          }
+        }
+      } catch (err) {
+        console.error('Error notifying cleaner of hiring:', err);
+      }
 
       try {
         const { trackEvent } = await import('@/lib/analytics');

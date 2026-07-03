@@ -1,5 +1,5 @@
-import React, { useRef } from "react";
-import { View, StyleSheet } from "react-native";
+import React, { useRef, useEffect, useState } from "react";
+import { View, StyleSheet, Pressable } from "react-native";
 import { Text, useTheme } from "react-native-paper";
 import { Map, Camera, Marker } from "@maplibre/maplibre-react-native";
 import { spacing, borderRadius } from "@/lib/theme";
@@ -11,6 +11,7 @@ interface MapPickerProps {
   longitude: number | null;
   onLocationChange: (lat: number, lng: number) => void;
   height?: number;
+  onMapInteraction?: (interacting: boolean) => void;
 }
 
 const osmRasterStyle = {
@@ -37,26 +38,56 @@ export default function MapPicker({
   latitude,
   longitude,
   onLocationChange,
-  height = 300,
+  height = 350,
+  onMapInteraction,
 }: MapPickerProps) {
   const theme = useTheme();
   const cameraRef = useRef<any>(null);
+  const [currentZoom, setCurrentZoom] = useState(16);
 
   const hasCoords = latitude !== null && longitude !== null;
   const center: Coordinate = hasCoords
     ? [longitude!, latitude!]
-    : [-1.2864, 5.1036];
+    : [-1.2825, 5.1154]; // University of Cape Coast (UCC) main campus center
+
+  // Fly camera to new coordinates when latitude/longitude props change
+  useEffect(() => {
+    if (hasCoords && cameraRef.current) {
+      cameraRef.current.flyTo({ center: [longitude!, latitude!], duration: 600 });
+      setCurrentZoom(16);
+    }
+  }, [latitude, longitude, hasCoords]);
 
   const handleMapPress = (e: any) => {
     if (e?.geometry?.coordinates) {
       const [lng, lat] = e.geometry.coordinates;
       onLocationChange(lat, lng);
-      cameraRef.current?.flyTo([lng, lat], 600);
+    }
+  };
+
+  const handleZoomIn = () => {
+    const newZoom = Math.min(currentZoom + 1, 19);
+    setCurrentZoom(newZoom);
+    if (cameraRef.current) {
+      cameraRef.current.zoomTo(newZoom, { duration: 300 });
+    }
+  };
+
+  const handleZoomOut = () => {
+    const newZoom = Math.max(currentZoom - 1, 5);
+    setCurrentZoom(newZoom);
+    if (cameraRef.current) {
+      cameraRef.current.zoomTo(newZoom, { duration: 300 });
     }
   };
 
   return (
-    <View style={[styles.container, { height, borderRadius: borderRadius.lg, borderColor: theme.colors.outline }]}>
+    <View 
+      style={[styles.container, { height, borderRadius: borderRadius.lg, borderColor: theme.colors.outline }]}
+      onTouchStart={() => onMapInteraction?.(true)}
+      onTouchEnd={() => onMapInteraction?.(false)}
+      onTouchCancel={() => onMapInteraction?.(false)}
+    >
       <Map
         mapStyle={osmRasterStyle}
         style={styles.map}
@@ -86,12 +117,32 @@ export default function MapPicker({
         )}
       </Map>
 
+      {/* Zoom Controls */}
+      <View style={styles.zoomControls}>
+        <Pressable
+          style={[styles.zoomBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outline }]}
+          onPress={handleZoomIn}
+          accessibilityLabel="Zoom in"
+        >
+          <Text style={[styles.zoomBtnText, { color: theme.colors.onSurface }]}>＋</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.zoomBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outline }]}
+          onPress={handleZoomOut}
+          accessibilityLabel="Zoom out"
+        >
+          <Text style={[styles.zoomBtnText, { color: theme.colors.onSurface }]}>−</Text>
+        </Pressable>
+      </View>
+
+      {/* Tap hint */}
       <View style={[styles.tapHint, { backgroundColor: theme.colors.surface + "E6" }]}>
         <Text style={[styles.tapHintText, { color: theme.colors.onSurface }]} variant="bodySmall">
           Tap the map to place or drag the pin to adjust
         </Text>
       </View>
 
+      {/* Coordinate badge */}
       {hasCoords && (
         <View style={[styles.coordsBadge, { backgroundColor: theme.colors.primaryContainer }]}>
           <Text style={[styles.coordsText, { color: theme.colors.primary }]} variant="labelSmall">
@@ -142,6 +193,30 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "rgba(0,0,0,0.2)",
     marginTop: -2,
+  },
+  zoomControls: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    gap: 6,
+  },
+  zoomBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  zoomBtnText: {
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 22,
   },
   tapHint: {
     position: "absolute",

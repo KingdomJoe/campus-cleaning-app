@@ -8,11 +8,12 @@ import { colors } from "@/lib/theme";
 import Logo from "@/components/Logo";
 
 export default function IndexScreen() {
-  const { isLoading, isInitialized, session, role, profile } = useAuthStore();
+  const { isLoading, isInitialized, session, role, profile, profileLoading } = useAuthStore();
   const theme = useTheme();
   const url = Linking.useURL();
 
   useEffect(() => {
+    // Don't redirect until auth is fully initialized AND profile is loaded (if session exists)
     if (!isInitialized || isLoading) return;
 
     // If a deep-link auth callback is in-flight, let auth/callback.tsx handle routing
@@ -26,7 +27,13 @@ export default function IndexScreen() {
       return;
     }
 
-    // If role is not selected, redirect to role selection
+    // Wait for profile to load before making role-based decisions
+    if (profileLoading) {
+      console.log('IndexScreen: Waiting for profile to load...');
+      return;
+    }
+
+    // If role is not selected (no profile), redirect to role selection
     if (!role) {
       router.replace("/(auth)/register");
       return;
@@ -47,7 +54,7 @@ export default function IndexScreen() {
     } else {
       router.replace("/(client)/home");
     }
-  }, [isInitialized, isLoading, session, role, profile, url]);
+  }, [isInitialized, isLoading, session, role, profile, profileLoading, url]);
 
   return (
     <View

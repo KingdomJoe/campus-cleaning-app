@@ -123,13 +123,7 @@ export default function BookingDetailScreen() {
                 console.error('Error initiating escrow payment:', err);
               }
 
-              // Notify cleaner
-              await supabase.from('notifications').insert({
-                user_id: cleanerId,
-                title: 'You have been hired! 🎉',
-                body: `A client has hired you for the job at ${booking.location}.`,
-                data: { bookingId: booking.id, role: 'cleaner' }
-              });
+
 
               Alert.alert('Success', `${cleanerName} has been assigned to your booking!`);
               loadBooking();
@@ -157,6 +151,22 @@ export default function BookingDetailScreen() {
               .eq('id', appId);
 
             if (!error) {
+              // Notify cleaner of application decline
+              const app = applications.find((a) => a.id === appId);
+              if (app?.cleaner_id) {
+                try {
+                  const { createNotification } = await import('@/lib/notifications');
+                  await createNotification({
+                    userId: app.cleaner_id,
+                    title: 'Offer Declined ⚠️',
+                    body: `Your offer for the booking at ${booking.location} was declined.`,
+                    data: { bookingId: booking.id, role: 'cleaner' },
+                  });
+                } catch (err) {
+                  console.error('Error notifying cleaner of decline:', err);
+                }
+              }
+
               Alert.alert('Success', 'Application declined.');
               loadBooking();
             } else {

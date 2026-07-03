@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { View, StyleSheet, TouchableWithoutFeedback, Animated, Easing } from "react-native";
+import { View, StyleSheet, TouchableWithoutFeedback, Animated, Easing, Alert } from "react-native";
 import { Text, Avatar, Divider, useTheme } from "react-native-paper";
 import { router, usePathname } from "expo-router";
 import { useAuthStore } from "@/stores/authStore";
 import { colors, spacing, borderRadius } from "@/lib/theme";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { supabase } from "@/lib/supabase";
 
 type UserRole = "client" | "cleaner";
 
@@ -22,6 +23,7 @@ const CLIENT_NAV_ITEMS: NavItem[] = [
   { label: "Messages", icon: "chat", href: "/(client)/messages" },
   { label: "Profile", icon: "account", href: "/(client)/profile" },
   { label: "Location Settings", icon: "map-marker", href: "/(client)/settings/location" },
+  { label: "Help & Feedback", icon: "help-circle", href: "/(client)/help" },
 ];
 
 const CLEANER_NAV_ITEMS: NavItem[] = [
@@ -29,7 +31,7 @@ const CLEANER_NAV_ITEMS: NavItem[] = [
   { label: "Messages", icon: "chat", href: "/(cleaner)/messages" },
   { label: "Earnings", icon: "cash", href: "/(cleaner)/earnings" },
   { label: "Profile", icon: "account", href: "/(cleaner)/profile" },
-  { label: "Location Settings", icon: "map-marker", href: "/(cleaner)/settings/location" },
+  { label: "Help & Feedback", icon: "help-circle", href: "/(cleaner)/help" },
 ];
 
 interface SidebarProps {
@@ -40,7 +42,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose, userRole }: SidebarProps) {
   const theme = useTheme();
-  const { profile, signOut } = useAuthStore();
+  const { profile, signOut, fetchProfile } = useAuthStore();
   const currentPath = usePathname();
 
   const navItems = userRole === "client" ? CLIENT_NAV_ITEMS : CLEANER_NAV_ITEMS;
@@ -67,13 +69,42 @@ export default function Sidebar({ isOpen, onClose, userRole }: SidebarProps) {
     onClose();
   };
 
+  const handleSwitchRole = async () => {
+    if (!profile?.id) return;
+    const newRole = userRole === "client" ? "cleaner" : "client";
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ role: newRole })
+        .eq("id", profile.id);
+
+      if (error) throw error;
+
+      if (newRole === "cleaner") {
+        await supabase
+          .from("cleaner_profiles")
+          .upsert({ user_id: profile.id });
+      }
+
+      await fetchProfile();
+      onClose();
+      
+      if (newRole === "cleaner") {
+        router.replace("/(cleaner)/jobs");
+      } else {
+        router.replace("/(client)/home");
+      }
+    } catch (err) {
+      console.error("Error switching role:", err);
+      Alert.alert("Error", "Failed to switch roles. Please try again.");
+    }
+  };
+
   const firstName = profile?.full_name?.split(" ")[0] ?? "User";
   const roleLabel = userRole === "client" ? "🏠 Client" : "🧹 Cleaner";
 
-  // Check if a nav item is the active route
   const isNavActive = (href: string) => {
     if (!currentPath) return false;
-    // Exact match or starts-with for nested routes
     return currentPath === href || currentPath.startsWith(href + "/");
   };
 
@@ -170,7 +201,24 @@ export default function Sidebar({ isOpen, onClose, userRole }: SidebarProps) {
           })}
         </View>
 
-        <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+        {profile?.registered_as_client && profile?.registered_as_cleaner && (
+          <>
+            <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+            <TouchableWithoutFeedback onPress={handleSwitchRole}>
+              <View style={styles.switchRoleItem}>
+                <MaterialCommunityIcons
+                  name={"swap-horizontal" as any}
+                  size={24}
+                  color={theme.colors.primary}
+                  style={styles.navIcon}
+                />
+                <Text style={[styles.navLabel, { color: theme.colors.primary, fontWeight: "600" }]} variant="bodyMedium">
+                  {userRole === "client" ? "Switch to Cleaner Mode" : "Switch to Client Mode"}
+                </Text>
+              </View>
+            </TouchableWithoutFeedback>
+          </>
+        )}
 
         <TouchableWithoutFeedback onPress={handleSignOut}>
           <View style={styles.signOutItem}>
@@ -265,6 +313,16 @@ const styles = StyleSheet.create({
   navLabel: {
     fontSize: 16,
   },
+  switchRoleItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.md,
+  },
   signOutItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -272,7 +330,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     marginHorizontal: spacing.md,
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
     borderRadius: borderRadius.md,
   },
   versionInfo: {

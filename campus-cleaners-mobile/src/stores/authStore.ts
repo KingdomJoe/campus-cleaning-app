@@ -11,6 +11,7 @@ interface AuthState {
   role: UserRole | null;
   isLoading: boolean;
   isInitialized: boolean;
+  profileLoading: boolean; // Track profile loading separately
   pendingDocuments: Record<string, string | null> | null;
   pendingProfilePhoto: string | null;
 
@@ -33,6 +34,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   role: null,
   isLoading: true,
   isInitialized: false,
+  profileLoading: false,
   pendingDocuments: null,
   pendingProfilePhoto: null,
 
@@ -64,10 +66,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   fetchProfile: async () => {
     const { user } = get();
-    if (!user) return;
+    if (!user) {
+      console.log('[AuthStore] fetchProfile: No user found');
+      return;
+    }
 
+    console.log('[AuthStore] fetchProfile: Fetching profile for user:', user.id);
+    set({ profileLoading: true });
     try {
-      set({ isLoading: true });
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -75,16 +81,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .single();
 
       if (error) {
-        console.error('Error fetching profile:', error.message);
-        set({ isLoading: false });
+        console.error('[AuthStore] fetchProfile: Error fetching profile:', error.message);
+        set({ profileLoading: false });
         return;
       }
 
-      // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
-      set({ profile, role: profile?.role ?? null });
+      console.log('[AuthStore] fetchProfile: Profile loaded:', profile);
+      set({ profile, role: profile?.role ?? null, profileLoading: false });
 
       // If cleaner, fetch cleaner profile too
-      // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
       if (profile?.role === 'cleaner') {
         const { data: cleanerProfile } = await supabase
           .from('cleaner_profiles')
@@ -97,8 +102,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     } catch (err) {
       console.error('Error in fetchProfile:', err);
-    } finally {
-      set({ isLoading: false });
+      set({ profileLoading: false });
     }
   },
 
@@ -116,6 +120,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       profile: null,
       cleanerProfile: null,
       role: null,
+      profileLoading: false,
     });
   },
 
@@ -130,9 +135,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           session,
           user: session.user,
         });
-        await get().fetchProfile();
+        try {
+          await get().fetchProfile();
+        } finally {
+          set({ isLoading: false });
+        }
       } else {
-        set({ isLoading: false });
+        set({ isLoading: false, profileLoading: false });
       }
 
       // Listen for auth state changes
@@ -143,23 +152,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({
           session,
           user: session?.user ?? null,
-          ...(isLoggingIn ? { isLoading: true } : {}),
+          ...(isLoggingIn ? { isLoading: true, profileLoading: true } : {}),
         });
 
         if (session?.user) {
-          await get().fetchProfile();
+          try {
+            await get().fetchProfile();
+          } finally {
+            set({ isLoading: false });
+          }
         } else {
           set({
             profile: null,
             cleanerProfile: null,
             role: null,
             isLoading: false,
+            profileLoading: false,
           });
         }
       });
     } catch (err) {
       console.error('Error initializing auth:', err);
-      set({ isLoading: false });
+      set({ isLoading: false, profileLoading: false });
     } finally {
       set({ isInitialized: true });
     }

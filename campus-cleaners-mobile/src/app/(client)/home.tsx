@@ -23,18 +23,30 @@ export default function ClientHomeScreen() {
     setServicesLoading(true);
     setServicesError(null);
     try {
+      // First attempt: fetch active services
       const { data, error } = await supabase
         .from("service_types")
         .select("*")
-        .eq("is_active", true)
         .order("category");
       if (error) throw error;
-      // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
-      if (data) setServices(data);
+
+      if (data && data.length > 0) {
+        // Filter active services client-side to be resilient to is_active default issues
+        const activeServices = data.filter(
+          (s: any) => s.is_active === true || s.is_active === null || s.is_active === undefined
+        );
+        // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
+        setServices(activeServices.length > 0 ? activeServices : data);
+      } else {
+        setServices([]);
+        console.warn(
+          "[Services] service_types table returned 0 rows. Ensure seed data (003_seed_data.sql) has been applied."
+        );
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to load services";
       setServicesError(message);
-      console.error("Error fetching services:", err);
+      console.error("[Services] Error fetching services:", err);
     } finally {
       setServicesLoading(false);
     }
@@ -172,12 +184,26 @@ export default function ClientHomeScreen() {
             What do you need today?
           </Text>
         </View>
-        <Avatar.Text
-          size={44}
-          label={firstName.charAt(0)}
-          style={[styles.avatar, { backgroundColor: theme.colors.primary }]}
-          color="#FFFFFF"
-        />
+        <Pressable 
+          onPress={() => router.push("/(client)/profile" as any)}
+          style={({ pressed }) => [styles.avatarPressable, pressed && { opacity: 0.7 }]}
+          accessibilityLabel="Go to Profile"
+        >
+          {profile?.avatar_url ? (
+            <Avatar.Image
+              size={44}
+              source={{ uri: profile.avatar_url }}
+              style={styles.avatar}
+            />
+          ) : (
+            <Avatar.Text
+              size={44}
+              label={firstName.charAt(0).toUpperCase()}
+              style={[styles.avatar, { backgroundColor: theme.colors.primary }]}
+              color="#FFFFFF"
+            />
+          )}
+        </Pressable>
       </View>
 
       {/* Active Booking Banner */}
@@ -213,7 +239,7 @@ export default function ClientHomeScreen() {
           "🧹",
           cleaningServices,
           "cleaning",
-          { "Express Touch-Up": "⚡", "Deep Scrub": "🔥", "Move-In / Move-Out": "📦" }
+          { "Express Touch-Up": "⚡", "Deep Scrub": "🧽", "Move-In / Move-Out": "📦" }
         )}
       </View>
 
@@ -274,6 +300,9 @@ const styles = StyleSheet.create({
   },
   avatar: {
     // backgroundColor set inline via theme
+  },
+  avatarPressable: {
+    marginLeft: spacing.sm,
   },
   section: {
     marginBottom: spacing.lg,

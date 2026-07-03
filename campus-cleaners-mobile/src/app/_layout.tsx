@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { Stack } from "expo-router";
 import { PaperProvider } from "react-native-paper";
@@ -7,6 +7,7 @@ import { lightTheme, darkTheme } from "@/lib/theme";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { setupNotificationResponseHandler } from "@/lib/notifications";
+import { ToastProvider } from "@/lib/toast";
 
 export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
@@ -48,19 +49,21 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <PaperProvider theme={activeTheme}>
         <StatusBar style={themeMode === "dark" ? "light" : "dark"} />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: activeTheme.colors.background },
-            animation: "slide_from_right",
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="auth/callback" options={{ animation: "fade" }} />
-          <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-          <Stack.Screen name="(client)" options={{ animation: "fade" }} />
-          <Stack.Screen name="(cleaner)" options={{ animation: "fade" }} />
-        </Stack>
+        <ToastProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: activeTheme.colors.background },
+              animation: "slide_from_right",
+            }}
+          >
+            <Stack.Screen name="index" />
+            <Stack.Screen name="auth/callback" options={{ animation: "fade" }} />
+            <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+            <Stack.Screen name="(client)" options={{ animation: "fade" }} />
+            <Stack.Screen name="(cleaner)" options={{ animation: "fade" }} />
+          </Stack>
+        </ToastProvider>
       </PaperProvider>
     </SafeAreaProvider>
   );

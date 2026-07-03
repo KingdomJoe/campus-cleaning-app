@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs */
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, LayoutAnimation, Platform } from 'react-native';
 import { Text } from 'react-native-paper';

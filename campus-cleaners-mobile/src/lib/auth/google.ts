@@ -21,6 +21,9 @@ export async function signInWithGoogle(): Promise<boolean> {
       options: {
         redirectTo: redirectUrl,
         skipBrowserRedirect: false,
+        queryParams: {
+          prompt: 'select_account',
+        },
       },
     });
 

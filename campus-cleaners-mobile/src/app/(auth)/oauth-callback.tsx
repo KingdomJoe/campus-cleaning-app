@@ -100,8 +100,10 @@ export default function OAuthCallbackScreen() {
         console.log('Final role for redirect:', finalRole);
         if (finalRole === 'cleaner') {
           router.replace('/(cleaner)/jobs');
-        } else {
+        } else if (finalRole === 'client') {
           router.replace('/(client)/home');
+        } else {
+          router.replace('/(auth)/register');
         }
       } catch (err) {
         console.error('Error handling oauth callback:', err);

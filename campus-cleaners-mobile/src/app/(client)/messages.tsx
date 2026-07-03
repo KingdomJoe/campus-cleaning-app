@@ -99,7 +99,7 @@ export default function MessagesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { paddingBottom: spacing.xxl },
+  list: { paddingBottom: spacing.xxl, flexGrow: 1 },
   row: {
     flexDirection: "row",
     alignItems: "center",

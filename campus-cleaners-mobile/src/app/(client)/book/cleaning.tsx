@@ -3,6 +3,7 @@ import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Pressable
 import { Text, TextInput, Button, SegmentedButtons, Switch, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useBookingStore } from '@/stores/bookingStore';
+import { useAuthStore } from '@/stores/authStore';
 import { colors, spacing } from '@/lib/theme';
 import CustomDatePickerModal from '@/components/CustomDatePickerModal';
 import CustomTimeSlotModal from '@/components/CustomTimeSlotModal';
@@ -26,6 +27,23 @@ export default function CleaningBookingScreen() {
   const { form, updateForm } = useBookingStore();
   const [roomType, setRoomType] = useState(form.roomType || 'single');
   const [roomSize, setRoomSize] = useState(form.roomSize || 'small');
+  const profile = useAuthStore((s) => s.profile);
+
+  // Security guard: redirect back if service type is not selected
+  React.useEffect(() => {
+    if (!form.serviceTypeId) {
+      router.replace('/(client)/book');
+    }
+  }, [form.serviceTypeId]);
+
+  React.useEffect(() => {
+    if (!form.location && profile?.location) {
+      const locString = profile.room_number 
+        ? `${profile.location}, Room ${profile.room_number}`
+        : profile.location;
+      updateForm({ location: locString });
+    }
+  }, [profile?.location, profile?.room_number, form.location, updateForm]);
 
   // Modal Visibility States
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -187,6 +205,15 @@ export default function CleaningBookingScreen() {
           disabled={!form.location || !form.scheduledDate || !form.scheduledTime}
         >
           Review Booking →
+        </Button>
+
+        <Button
+          mode="text"
+          onPress={() => router.back()}
+          textColor={theme.colors.onSurfaceVariant}
+          style={{ marginTop: spacing.xs }}
+        >
+          ← Go Back
         </Button>
       </ScrollView>
 

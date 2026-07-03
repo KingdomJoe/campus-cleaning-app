@@ -100,8 +100,46 @@ export function setupNotificationResponseHandler(): () => void {
 }
 
 /**
+ * Send an Expo Push Notification to a user device.
+ */
+export async function sendPushNotification(
+  pushToken: string,
+  title: string,
+  body: string,
+  data?: Record<string, unknown>
+) {
+  if (!pushToken || !pushToken.startsWith('ExponentPushToken')) {
+    console.log('[Push] Skipping push send: Invalid Expo push token');
+    return;
+  }
+
+  const message = {
+    to: pushToken,
+    sound: 'default',
+    title,
+    body,
+    data: data ?? {},
+  };
+
+  try {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+    const result = await response.json();
+    console.log('[Push] Expo push notification sent result:', result);
+  } catch (error) {
+    console.error('[Push] Error dispatching push notification:', error);
+  }
+}
+
+/**
  * Create a notification record in the database and optionally send a push.
- * In production, push sending would be done server-side via Supabase Edge Functions.
  */
 export async function createNotification(params: {
   userId: string;
@@ -119,5 +157,22 @@ export async function createNotification(params: {
 
   if (error) {
     console.error('Error creating notification:', error.message);
+  }
+
+  // Query push token and dispatch push notification
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('push_token')
+      .eq('id', params.userId)
+      .single();
+
+    if (profile?.push_token) {
+      sendPushNotification(profile.push_token, params.title, params.body, params.data).catch((err) =>
+        console.error('[Push] Async dispatch failed:', err)
+      );
+    }
+  } catch (err) {
+    console.error('[Push] Failed to dispatch push notification:', err);
   }
 }

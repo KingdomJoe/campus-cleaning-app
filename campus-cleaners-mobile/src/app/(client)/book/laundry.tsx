@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { Text, TextInput, Button, Checkbox, useTheme } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useBookingStore } from '@/stores/bookingStore';
+import { useAuthStore } from '@/stores/authStore';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 import CustomDatePickerModal from '@/components/CustomDatePickerModal';
 import CustomTimeSlotModal from '@/components/CustomTimeSlotModal';
@@ -16,6 +17,24 @@ const LAUNDRY_ITEMS = [
 export default function LaundryBookingScreen() {
   const theme = useTheme();
   const { form, updateForm, addLaundryItem, removeLaundryItem, updateLaundryQuantity } = useBookingStore();
+  const profile = useAuthStore((s) => s.profile);
+
+  // Security guard: redirect back if service type is not selected
+  useEffect(() => {
+    if (!form.serviceTypeId) {
+      router.replace('/(client)/book');
+    }
+  }, [form.serviceTypeId]);
+
+  // Prefill location from client profile
+  useEffect(() => {
+    if (!form.location && profile?.location) {
+      const locString = profile.room_number 
+        ? `${profile.location}, Room ${profile.room_number}`
+        : profile.location;
+      updateForm({ location: locString });
+    }
+  }, [profile?.location, profile?.room_number, form.location, updateForm]);
 
   // Modal Visibility States
   const [showDatePicker, setShowDatePicker] = useState(false);

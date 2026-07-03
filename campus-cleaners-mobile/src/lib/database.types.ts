@@ -37,6 +37,8 @@ export interface Profile {
   avatar_url: string | null;
   push_token: string | null;
   status: UserStatus;
+  registered_as_client?: boolean;
+  registered_as_cleaner?: boolean;
   created_at: string;
   updated_at: string;
 }

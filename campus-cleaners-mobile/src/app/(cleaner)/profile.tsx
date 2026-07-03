@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
+import { View, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator } from "react-native";
 import {
   Text,
   Button,
@@ -12,6 +12,8 @@ import {
   ProgressBar,
   TextInput,
 } from "react-native-paper";
+
+const PaperText = Text;
 import { router } from "expo-router";
 import { useAuthStore } from "@/stores/authStore";
 import StarRating from "@/components/StarRating";
@@ -24,6 +26,7 @@ import {
   uploadDocument,
 } from "@/lib/api/uploads";
 import { supabase } from "@/lib/supabase";
+import { showToast } from "@/lib/toast";
 
 const verificationStatusConfig = {
   pending: { label: "Pending Verification", color: colors.warning, icon: "⏳" },
@@ -32,14 +35,36 @@ const verificationStatusConfig = {
 };
 
 const SKILL_OPTIONS = ["General cleaning", "Deep cleaning", "Laundry"];
+const UCC_AREAS = [
+  "Amamoma",
+  "Kwaprow",
+  "Apewosika",
+  "Kokoado",
+  "Duakor",
+  "UCC Main Campus",
+  "Science",
+  "Valco Flat"
+];
 
 export default function CleanerProfileScreen() {
   "use no memo"; // Opt out: form-sync effects and async document loading call setState in effects
-  const { profile, cleanerProfile, signOut, fetchProfile } = useAuthStore();
+  const { profile, cleanerProfile, signOut, fetchProfile, profileLoading } = useAuthStore();
   const { themeMode, toggleTheme } = useThemeStore();
   const theme = useTheme();
 
-  // Edit Mode States
+  // Show loading state while profile is loading
+  if (profileLoading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <PaperText style={styles.loadingText} variant="bodyMedium">
+          Loading profile...
+        </PaperText>
+      </View>
+    );
+  }
+
+  // Edit Mode States (Work Details)
   const [isEditing, setIsEditing] = useState(false);
   const [bio, setBio] = useState(cleanerProfile?.bio ?? "");
   const [momo, setMomo] = useState(cleanerProfile?.mobile_money_number ?? "");
@@ -51,8 +76,37 @@ export default function CleanerProfileScreen() {
   );
   const [skills, setSkills] = useState<string[]>(cleanerProfile?.skills ?? []);
 
+  const toggleSkill = (skill: string) => {
+    setSkills((prev) =>
+      prev.includes(skill)
+        ? prev.filter((s) => s !== skill)
+        : [...prev, skill]
+    );
+  };
+
+  // Edit Mode States (Personal Info & Neighborhood Location)
+  const [isEditingPersonal, setIsEditingPersonal] = useState(false);
+  const [fullName, setFullName] = useState(profile?.full_name ?? "");
+  const [phone, setPhone] = useState(profile?.phone ?? "");
+  const [email, setEmail] = useState(profile?.email ?? "");
+  const [locationStr, setLocationStr] = useState(profile?.location ?? "");
+
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  // Sync personal info state with store profile updates
+  useEffect(() => {
+    if (profile) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFullName(profile.full_name ?? "");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPhone(profile.phone ?? "");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEmail(profile.email ?? "");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLocationStr(profile.location ?? "");
+    }
+  }, [profile]);
 
   // Sync state with store profile updates
   useEffect(() => {
@@ -215,29 +269,23 @@ export default function CleanerProfileScreen() {
       const publicUrl = await uploadAvatar(profile.id, uri);
       if (publicUrl) {
         await fetchProfile();
-        Alert.alert("Success", "Profile photo updated successfully!");
+        showToast('Profile photo updated successfully!', 'success');
       } else {
-        Alert.alert(
-          "Error",
-          "Could not upload photo. Please check network and try again.",
-        );
+        showToast('Could not upload photo. Check network and try again.', 'error');
       }
     } catch (err) {
       console.error("Photo picker error:", err);
-      Alert.alert("Error", "Failed to update profile photo.");
+      showToast('Failed to update profile photo.', 'error');
     } finally {
       setIsUploadingPhoto(false);
     }
   };
 
-  const toggleSkill = (skill: string) => {
-    setSkills((prev) =>
-      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill],
-    );
-  };
-
   const handleSaveDetails = async () => {
-    if (!profile?.id) return;
+    if (!profile?.id) {
+      showToast('Profile not loaded. Please wait...', 'error');
+      return;
+    }
     setIsSaving(true);
 
     try {
@@ -250,10 +298,7 @@ export default function CleanerProfileScreen() {
           : `+233${cleaned.replace(/^0/, "")}`;
         const ghanaPhoneRegex = /^\+233\d{9}$/;
         if (!ghanaPhoneRegex.test(formattedGuarantorPhone)) {
-          Alert.alert(
-            "Invalid Phone",
-            "Please enter a valid Ghana phone number for your guarantor.",
-          );
+          showToast('Please enter a valid Ghana phone number for your guarantor.', 'error');
           setIsSaving(false);
           return;
         }
@@ -299,10 +344,59 @@ export default function CleanerProfileScreen() {
 
       await fetchProfile();
       setIsEditing(false);
-      Alert.alert("Success", "Profile details updated successfully!");
+      showToast('Profile details updated successfully!', 'success');
     } catch (err: any) {
       console.error("Error saving profile details:", err);
-      Alert.alert("Error", err.message || "Failed to save profile changes.");
+      showToast(err.message || 'Failed to save profile changes.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSavePersonal = async () => {
+    if (!profile?.id) {
+      showToast('Profile not loaded. Please wait...', 'error');
+      return;
+    }
+    if (!fullName.trim()) {
+      showToast('Full Name is required.', 'error');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      // Clean, format, and validate phone if entered
+      let formattedPhone = phone.trim();
+      if (formattedPhone) {
+        const cleaned = formattedPhone.replace(/[^\d+]/g, "");
+        formattedPhone = cleaned.startsWith("+")
+          ? cleaned
+          : `+233${cleaned.replace(/^0/, "")}`;
+        const ghanaPhoneRegex = /^\+233\d{9}$/;
+        if (!ghanaPhoneRegex.test(formattedPhone)) {
+          showToast('Please enter a valid Ghana mobile number (e.g. 024 123 4567).', 'error');
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: fullName.trim(),
+          phone: formattedPhone || null,
+          email: email.trim() || null,
+          location: locationStr.trim() || null,
+        } as any)
+        .eq("id", profile.id);
+
+      if (error) throw error;
+
+      await fetchProfile();
+      setIsEditingPersonal(false);
+      showToast('Personal details updated successfully!', 'success');
+    } catch (err: any) {
+      console.error("Error saving personal details:", err);
+      showToast(err.message || 'Failed to save personal details.', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -350,15 +444,15 @@ export default function CleanerProfileScreen() {
           </Text>
         )}
 
-        <Text
-          style={[styles.name, { color: theme.colors.onBackground }]}
-          variant="headlineSmall"
-        >
-          {profile?.full_name ?? "Cleaner"}
-        </Text>
-        <Text style={styles.role} variant="bodyMedium">
+<PaperText
+           style={[styles.name, { color: theme.colors.onBackground }]}
+           variant="headlineSmall"
+         >
+           {profile?.full_name ?? "Cleaner"}
+         </PaperText>
+        <PaperText style={styles.role} variant="bodyMedium">
           🧹 Cleaner
-        </Text>
+        </PaperText>
 
         {/* Verification Status Badge */}
         <Chip
@@ -387,16 +481,16 @@ export default function CleanerProfileScreen() {
                 showValue
                 size={20}
               />
-              <Text
-                style={[
-                  styles.jobCount,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-                variant="bodySmall"
-              >
-                ({cleanerProfile.total_jobs} job
-                {cleanerProfile.total_jobs !== 1 ? "s" : ""})
-              </Text>
+<PaperText
+             style={[
+               styles.jobCount,
+               { color: theme.colors.onSurfaceVariant },
+             ]}
+             variant="bodySmall"
+           >
+             ({cleanerProfile.total_jobs} job
+             {cleanerProfile.total_jobs !== 1 ? "s" : ""})
+           </PaperText>
             </View>
           )}
       </View>
@@ -414,18 +508,18 @@ export default function CleanerProfileScreen() {
       >
         <Card.Content>
           <View style={styles.gaugeHeader}>
-            <Text
+            <PaperText
               variant="titleMedium"
               style={{ fontWeight: "700", color: theme.colors.onSurface }}
             >
               Profile Completion
-            </Text>
-            <Text
+            </PaperText>
+            <PaperText
               variant="titleMedium"
               style={{ fontWeight: "700", color: theme.colors.primary }}
             >
               {completionPct}%
-            </Text>
+            </PaperText>
           </View>
           <ProgressBar
             progress={completionPct / 100}
@@ -438,7 +532,7 @@ export default function CleanerProfileScreen() {
           />
 
           <View style={styles.checklist}>
-            <Text
+            <PaperText
               style={[
                 styles.checkItem,
                 { color: theme.colors.onSurfaceVariant },
@@ -446,8 +540,8 @@ export default function CleanerProfileScreen() {
               variant="bodySmall"
             >
               {hasPhoto ? "✅" : "❌"} Profile Photo
-            </Text>
-            <Text
+            </PaperText>
+            <PaperText
               style={[
                 styles.checkItem,
                 { color: theme.colors.onSurfaceVariant },
@@ -455,8 +549,8 @@ export default function CleanerProfileScreen() {
               variant="bodySmall"
             >
               {hasBio ? "✅" : "❌"} Short Bio
-            </Text>
-            <Text
+            </PaperText>
+            <PaperText
               style={[
                 styles.checkItem,
                 { color: theme.colors.onSurfaceVariant },
@@ -464,8 +558,8 @@ export default function CleanerProfileScreen() {
               variant="bodySmall"
             >
               {hasMomo ? "✅" : "❌"} Mobile Money Number
-            </Text>
-            <Text
+            </PaperText>
+            <PaperText
               style={[
                 styles.checkItem,
                 { color: theme.colors.onSurfaceVariant },
@@ -473,8 +567,8 @@ export default function CleanerProfileScreen() {
               variant="bodySmall"
             >
               {hasSkills ? "✅" : "❌"} Professional Skills
-            </Text>
-            <Text
+            </PaperText>
+            <PaperText
               style={[
                 styles.checkItem,
                 { color: theme.colors.onSurfaceVariant },
@@ -482,8 +576,8 @@ export default function CleanerProfileScreen() {
               variant="bodySmall"
             >
               {hasGuarantor ? "✅" : "❌"} Guarantor Details
-            </Text>
-            <Text
+            </PaperText>
+            <PaperText
               style={[
                 styles.checkItem,
                 { color: theme.colors.onSurfaceVariant },
@@ -491,8 +585,8 @@ export default function CleanerProfileScreen() {
               variant="bodySmall"
             >
               {hasGhanaCard ? "✅" : "❌"} Ghana Card (National ID)
-            </Text>
-            <Text
+            </PaperText>
+            <PaperText
               style={[
                 styles.checkItem,
                 { color: theme.colors.onSurfaceVariant },
@@ -500,7 +594,7 @@ export default function CleanerProfileScreen() {
               variant="bodySmall"
             >
               {hasSelfie ? "✅" : "❌"} Selfie Verification
-            </Text>
+            </PaperText>
           </View>
         </Card.Content>
       </Card>
@@ -517,26 +611,167 @@ export default function CleanerProfileScreen() {
         mode="contained"
       >
         <Card.Content>
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.primary }]}
-            variant="labelLarge"
-          >
-            Personal Information
-          </Text>
+          <View style={styles.sectionHeaderRow}>
+            <PaperText
+              style={[styles.sectionTitle, { color: theme.colors.primary }]}
+              variant="labelLarge"
+            >
+              Personal Information
+            </PaperText>
+            {!isEditingPersonal && (
+              <Button
+                mode="text"
+                compact
+                onPress={() => setIsEditingPersonal(true)}
+                textColor={theme.colors.primary}
+              >
+                Edit Details
+              </Button>
+            )}
+          </View>
           <Divider
             style={[styles.divider, { backgroundColor: theme.colors.outline }]}
           />
-          <InfoRow icon="📱" label="Phone" value={profile?.phone ?? "—"} />
-          <InfoRow icon="📧" label="Email" value={profile?.email ?? "—"} />
-          <Pressable
-            onPress={() => router.push("/(cleaner)/settings/location" as any)}
-          >
-            <InfoRow
-              icon="📍"
-              label="Location (Tap to change)"
-              value={profile?.location ?? "Not set"}
-            />
-          </Pressable>
+
+          {isEditingPersonal ? (
+            <View style={styles.editForm}>
+              <TextInput
+                label="Full Name"
+                value={fullName}
+                onChangeText={setFullName}
+                mode="outlined"
+                dense
+                outlineColor={theme.colors.outline}
+                activeOutlineColor={theme.colors.primary}
+                style={styles.textInput}
+              />
+
+              <TextInput
+                label="Phone"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                mode="outlined"
+                dense
+                outlineColor={theme.colors.outline}
+                activeOutlineColor={theme.colors.primary}
+                style={styles.textInput}
+              />
+
+              <TextInput
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                mode="outlined"
+                dense
+                outlineColor={theme.colors.outline}
+                activeOutlineColor={theme.colors.primary}
+                style={styles.textInput}
+              />
+
+              <Text style={styles.fieldLabel} variant="labelSmall">
+                Area / Neighborhood (Cape Coast)
+              </Text>
+              <View style={styles.chipEditRow}>
+                {UCC_AREAS.map((area) => (
+                  <Chip
+                    key={area}
+                    selected={locationStr === area}
+                    onPress={() => setLocationStr(area)}
+                    style={[
+                      styles.skillChipEdit,
+                      locationStr === area && {
+                        backgroundColor: theme.colors.primary,
+                      },
+                    ]}
+                    textStyle={{
+                      color: locationStr === area
+                        ? colors.white
+                        : theme.colors.onSurfaceVariant,
+                    }}
+                    showSelectedCheck={false}
+                    compact
+                  >
+                    {area}
+                  </Chip>
+                ))}
+                <Chip
+                  selected={!UCC_AREAS.includes(locationStr) && locationStr.length > 0}
+                  onPress={() => setLocationStr("")}
+                  style={[
+                    styles.skillChipEdit,
+                    !UCC_AREAS.includes(locationStr) && locationStr.length > 0 && {
+                      backgroundColor: theme.colors.primary,
+                    },
+                  ]}
+                  textStyle={{
+                    color: !UCC_AREAS.includes(locationStr) && locationStr.length > 0
+                      ? colors.white
+                      : theme.colors.onSurfaceVariant,
+                  }}
+                  showSelectedCheck={false}
+                  compact
+                >
+                  Other (Type manually)
+                </Chip>
+              </View>
+
+              {(!UCC_AREAS.includes(locationStr) || locationStr === "") && (
+                <TextInput
+                  label="Enter neighborhood manually"
+                  value={locationStr}
+                  onChangeText={setLocationStr}
+                  mode="outlined"
+                  dense
+                  placeholder="e.g. Kakumdo"
+                  outlineColor={theme.colors.outline}
+                  activeOutlineColor={theme.colors.primary}
+                  style={styles.textInput}
+                />
+              )}
+
+              <View style={styles.editActionRow}>
+                <Button
+                  mode="outlined"
+                  onPress={() => {
+                    setIsEditingPersonal(false);
+                    // Reset fields to current profile values
+                    setFullName(profile?.full_name ?? "");
+                    setPhone(profile?.phone ?? "");
+                    setEmail(profile?.email ?? "");
+                    setLocationStr(profile?.location ?? "");
+                  }}
+                  disabled={isSaving}
+                  textColor={theme.colors.outline}
+                  style={styles.actionBtn}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleSavePersonal}
+                  loading={isSaving}
+                  disabled={isSaving}
+                  buttonColor={theme.colors.primary}
+                  style={styles.actionBtn}
+                >
+                  Save
+                </Button>
+              </View>
+            </View>
+          ) : (
+            <View>
+              <InfoRow icon="👤" label="Full Name" value={profile?.full_name ?? "—"} />
+              <InfoRow icon="📱" label="Phone" value={profile?.phone ?? "—"} />
+              <InfoRow icon="📧" label="Email" value={profile?.email ?? "—"} />
+              <InfoRow
+                icon="📍"
+                label="Location"
+                value={profile?.location ?? "Not set"}
+              />
+            </View>
+          )}
         </Card.Content>
       </Card>
 
@@ -997,7 +1232,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xxl },
   header: { alignItems: "center", paddingVertical: spacing.xl },
-  avatarWrapper: { position: "relative" },
+  avatarWrapper: { position: "relative", alignSelf: "center" },
   avatar: { backgroundColor: colors.primaryDark },
   cameraBadge: {
     position: "absolute",
@@ -1079,4 +1314,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   actionBtn: { borderRadius: 8, minWidth: 90 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.md },
+  loadingText: { color: colors.onSurfaceVariant },
 });
