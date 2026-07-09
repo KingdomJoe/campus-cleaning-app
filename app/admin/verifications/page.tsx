@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   CheckCircle,
   XCircle,
@@ -11,8 +11,9 @@ import {
   User,
   ShieldCheck,
   AlertCircle,
+  ExternalLink,
 } from 'lucide-react'
-import { fetchCleaners, setCleanerVerification } from '@/lib/supabase/queries'
+import { fetchCleaners, setCleanerVerification, fetchCleanerDocuments } from '@/lib/supabase/queries'
 import { useLiveData } from '@/lib/supabase/hooks'
 import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -37,25 +38,65 @@ const CHECKLIST_ITEMS = [
   { key: 'photo', label: 'Profile Photo' },
 ]
 
-function mockChecklist(cleaner: Cleaner) {
-  const hash = cleaner.id.charCodeAt(cleaner.id.length - 1)
-  return CHECKLIST_ITEMS.map((item, i) => ({
-    ...item,
-    done:
-      cleaner.verificationStatus === 'approved'
-        ? true
-        : cleaner.verificationStatus === 'rejected'
-        ? i < 2
-        : cleaner.verificationStatus === 'incomplete'
-        ? i < 1
-        : (hash + i) % 3 !== 0,
-  }))
+/**
+ * Infers document completion from actual cleaner profile fields.
+ * Approved cleaners have all items done; for others, we check real data.
+ */
+function buildChecklist(cleaner: Cleaner, docs: any[] = []) {
+  if (cleaner.verificationStatus === 'approved') {
+    return CHECKLIST_ITEMS.map((item) => ({ ...item, done: true, fileUrl: undefined }))
+  }
+  return CHECKLIST_ITEMS.map((item) => {
+    let done = false
+    let fileUrl: string | undefined = undefined
+    switch (item.key) {
+      case 'id_card': {
+        const found = docs.find((d) => d.document_type === 'ghana_card' || d.document_type === 'student_id')
+        done = !!found || cleaner.verificationStatus === 'pending' || cleaner.verificationStatus === 'approved'
+        fileUrl = found?.file_url
+        break
+      }
+      case 'guarantor': {
+        const found = docs.find((d) => d.document_type === 'guarantor_doc')
+        done = !!found || (!!cleaner.guarantorName && !!cleaner.guarantorPhone)
+        fileUrl = found?.file_url
+        break
+      }
+      case 'background':
+        // Background check is done if verification is pending or approved
+        done = cleaner.verificationStatus === 'pending' || cleaner.verificationStatus === 'approved'
+        break
+      case 'training':
+        // Infer training completion from having completed at least 1 job
+        done = cleaner.jobsCompleted > 0 || cleaner.verificationStatus === 'approved'
+        break
+      case 'photo': {
+        const found = docs.find((d) => d.document_type === 'selfie')
+        done = !!found || !!cleaner.avatar
+        fileUrl = found?.file_url ?? cleaner.avatar
+        break
+      }
+    }
+    return { ...item, done, fileUrl }
+  })
 }
 
 export default function VerificationsPage() {
   const [filter, setFilter] = useState<string>('all')
   const [selected, setSelected] = useState<Cleaner | null>(null)
   const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null)
+  const [cleanerDocs, setCleanerDocs] = useState<any[]>([])
+
+  useEffect(() => {
+    if (selected) {
+      const sb = createClient()
+      fetchCleanerDocuments(sb, selected.id).then((docs) => {
+        setCleanerDocs(docs)
+      })
+    } else {
+      setCleanerDocs([])
+    }
+  }, [selected])
 
   const { data: cleanersData } = useLiveData(fetchCleaners, { table: 'cleaner_profiles' })
   const cleaners = cleanersData ?? []
@@ -68,7 +109,7 @@ export default function VerificationsPage() {
     return c.verificationStatus === filter
   })
 
-  const checklist = selected ? mockChecklist(selected) : []
+  const checklist = selected ? buildChecklist(selected, cleanerDocs) : []
   const checklistDone = checklist.filter((i) => i.done).length
 
   return (
@@ -123,7 +164,7 @@ export default function VerificationsPage() {
         {/* Cards grid */}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((cleaner) => {
-            const cl = mockChecklist(cleaner)
+            const cl = buildChecklist(cleaner)
             const done = cl.filter((i) => i.done).length
             const isSelected = selected?.id === cleaner.id
             return (
@@ -256,22 +297,35 @@ export default function VerificationsPage() {
                   {checklistDone}/{checklist.length}
                 </span>
               </div>
-              <ul className="space-y-2">
+               <ul className="space-y-2">
                 {checklist.map((item) => (
-                  <li key={item.key} className="flex items-center gap-2.5">
-                    {item.done ? (
-                      <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-[#c1ccd6] flex-shrink-0" />
-                    )}
-                    <span
-                      className={cn(
-                        'text-sm',
-                        item.done ? 'text-[#3d4f5b]' : 'text-[#a8b3bc]'
+                  <li key={item.key} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {item.done ? (
+                        <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-[#c1ccd6] flex-shrink-0" />
                       )}
-                    >
-                      {item.label}
-                    </span>
+                      <span
+                        className={cn(
+                          'text-sm truncate',
+                          item.done ? 'text-[#3d4f5b]' : 'text-[#a8b3bc]'
+                        )}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                    {item.fileUrl && (
+                      <a
+                        href={item.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-0.5 text-xs text-[#00684a] hover:underline hover:text-[#008c34] font-medium flex-shrink-0 transition-colors"
+                      >
+                        <span>View</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>

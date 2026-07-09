@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   MapPin,
   DollarSign,
@@ -21,6 +21,8 @@ import {
   fetchAdminUsers,
   updateServiceTypePrice,
   toggleServiceArea,
+  fetchPlatformSettings,
+  updatePlatformSetting,
 } from '@/lib/supabase/queries'
 import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -166,7 +168,11 @@ function AreasTab({ serviceAreas }: { serviceAreas: ServiceArea[] }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-[#7c8c9a]">Manage the geographic zones where Uber for Cleaning operates.</p>
-        <button className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#001e2b] text-white text-xs font-semibold hover:bg-[#003d4f] transition-colors">
+        <button
+          title="Coming soon — this feature is under development"
+          className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#001e2b]/50 text-white/70 text-xs font-semibold cursor-not-allowed"
+          disabled
+        >
           <Plus className="w-3.5 h-3.5" />
           Add Area
         </button>
@@ -227,7 +233,11 @@ function TeamTab({ adminUsers }: { adminUsers: AdminUser[] }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-[#7c8c9a]">Manage admin access and roles for the Uber for Cleaning team.</p>
-        <button className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#001e2b] text-white text-xs font-semibold hover:bg-[#003d4f] transition-colors">
+        <button
+          title="Coming soon — this feature is under development"
+          className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-[#001e2b]/50 text-white/70 text-xs font-semibold cursor-not-allowed"
+          disabled
+        >
           <Plus className="w-3.5 h-3.5" />
           Add Admin
         </button>
@@ -286,8 +296,19 @@ function TeamTab({ adminUsers }: { adminUsers: AdminUser[] }) {
 
 // ─── Platform Tab ────────────────────────────────────────────────────────────
 
-function ToggleSetting({ label, description, defaultOn = true }: { label: string; description: string; defaultOn?: boolean }) {
-  const [on, setOn] = useState(defaultOn)
+function ToggleSetting({
+  label,
+  description,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string
+  description: string
+  value: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+}) {
   return (
     <div className="flex items-start justify-between gap-4 py-4 border-b border-[#f4f7f6] last:border-0">
       <div>
@@ -295,11 +316,12 @@ function ToggleSetting({ label, description, defaultOn = true }: { label: string
         <p className="text-xs text-[#7c8c9a] mt-0.5">{description}</p>
       </div>
       <button
-        onClick={() => setOn((v) => !v)}
-        className="flex-shrink-0 mt-0.5"
-        aria-label={on ? `Disable ${label}` : `Enable ${label}`}
+        onClick={() => !disabled && onChange(!value)}
+        className={cn("flex-shrink-0 mt-0.5", disabled && "opacity-50 cursor-not-allowed")}
+        aria-label={value ? `Disable ${label}` : `Enable ${label}`}
+        disabled={disabled}
       >
-        {on ? (
+        {value ? (
           <ToggleRight className="w-7 h-7 text-[#00684a]" />
         ) : (
           <ToggleLeft className="w-7 h-7 text-[#c1ccd6]" />
@@ -310,28 +332,110 @@ function ToggleSetting({ label, description, defaultOn = true }: { label: string
 }
 
 function PlatformTab() {
+  const { data: settings, loading } = useLiveData(fetchPlatformSettings, { table: 'platform_settings' })
+  const [isEditingComm, setIsEditingComm] = useState(false)
+  const [commRate, setCommRate] = useState<string>('20')
+
+  useEffect(() => {
+    if (settings) {
+      setCommRate(String(settings.commission_rate ?? '20'))
+    }
+  }, [settings])
+
+  if (loading || !settings) {
+    return (
+      <div className="p-8 text-center text-sm text-[#7c8c9a]">
+        Loading settings...
+      </div>
+    )
+  }
+
+  async function handleToggle(field: string, val: boolean) {
+    const sb = createClient()
+    await updatePlatformSetting(sb, field, val)
+  }
+
+  async function handleSaveCommission() {
+    const sb = createClient()
+    const rateVal = parseFloat(commRate)
+    if (!isNaN(rateVal)) {
+      await updatePlatformSetting(sb, 'commission_rate', rateVal)
+    }
+    setIsEditingComm(false)
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl border border-[#e1e5e8] p-5">
         <p className="text-[11px] text-[#a8b3bc] uppercase font-semibold tracking-wide mb-1">Booking Settings</p>
-        <ToggleSetting label="Auto-Accept Bookings" description="Allow verified cleaners to auto-accept bookings without manual confirmation." />
-        <ToggleSetting label="Guest Bookings" description="Allow clients to book without creating an account." defaultOn={false} />
-        <ToggleSetting label="Booking Reminders" description="Send automated reminders to clients and cleaners 24h before a booking." />
-        <ToggleSetting label="Real-time Tracking" description="Enable GPS tracking for cleaners during active bookings." defaultOn={false} />
+        <ToggleSetting
+          label="Auto-Accept Bookings"
+          description="Allow verified cleaners to auto-accept bookings without manual confirmation."
+          value={!!settings.auto_accept_bookings}
+          onChange={(val) => handleToggle('auto_accept_bookings', val)}
+        />
+        <ToggleSetting
+          label="Guest Bookings"
+          description="Allow clients to book without creating an account."
+          value={!!settings.guest_bookings}
+          onChange={(val) => handleToggle('guest_bookings', val)}
+        />
+        <ToggleSetting
+          label="Booking Reminders"
+          description="Send automated reminders to clients and cleaners 24h before a booking."
+          value={!!settings.booking_reminders}
+          onChange={(val) => handleToggle('booking_reminders', val)}
+        />
+        <ToggleSetting
+          label="Real-time Tracking"
+          description="Enable GPS tracking for cleaners during active bookings."
+          value={!!settings.real_time_tracking}
+          onChange={(val) => handleToggle('real_time_tracking', val)}
+        />
       </div>
 
       <div className="bg-white rounded-xl border border-[#e1e5e8] p-5">
         <p className="text-[11px] text-[#a8b3bc] uppercase font-semibold tracking-wide mb-1">Payment Settings</p>
-        <ToggleSetting label="Auto-Release Payments" description="Automatically release escrow payments 24h after booking completion if no dispute is filed." />
-        <ToggleSetting label="Instant Payouts" description="Enable instant payout option for cleaners (additional processing fee applies)." defaultOn={false} />
-        <ToggleSetting label="Refund Policy Enforcement" description="Automatically enforce the 48-hour refund policy for cancellations." />
+        <ToggleSetting
+          label="Auto-Release Payments"
+          description="Automatically release escrow payments 24h after booking completion if no dispute is filed."
+          value={!!settings.auto_release_payments}
+          onChange={(val) => handleToggle('auto_release_payments', val)}
+        />
+        <ToggleSetting
+          label="Instant Payouts"
+          description="Enable instant payout option for cleaners (additional processing fee applies)."
+          value={!!settings.instant_payouts}
+          onChange={(val) => handleToggle('instant_payouts', val)}
+        />
+        <ToggleSetting
+          label="Refund Policy Enforcement"
+          description="Automatically enforce the 48-hour refund policy for cancellations."
+          value={!!settings.refund_policy_enforcement}
+          onChange={(val) => handleToggle('refund_policy_enforcement', val)}
+        />
       </div>
 
       <div className="bg-white rounded-xl border border-[#e1e5e8] p-5">
         <p className="text-[11px] text-[#a8b3bc] uppercase font-semibold tracking-wide mb-1">Platform Health</p>
-        <ToggleSetting label="Maintenance Mode" description="Take the platform offline for scheduled maintenance. Users will see a maintenance notice." defaultOn={false} />
-        <ToggleSetting label="New Registrations" description="Allow new client and cleaner registrations." />
-        <ToggleSetting label="Push Notifications" description="Enable push notifications across the platform." />
+        <ToggleSetting
+          label="Maintenance Mode"
+          description="Take the platform offline for scheduled maintenance. Users will see a maintenance notice."
+          value={!!settings.maintenance_mode}
+          onChange={(val) => handleToggle('maintenance_mode', val)}
+        />
+        <ToggleSetting
+          label="New Registrations"
+          description="Allow new client and cleaner registrations."
+          value={!!settings.new_registrations}
+          onChange={(val) => handleToggle('new_registrations', val)}
+        />
+        <ToggleSetting
+          label="Push Notifications"
+          description="Enable push notifications across the platform."
+          value={!!settings.push_notifications}
+          onChange={(val) => handleToggle('push_notifications', val)}
+        />
       </div>
 
       {/* Commission rate */}
@@ -339,16 +443,48 @@ function PlatformTab() {
         <p className="text-[11px] text-[#a8b3bc] uppercase font-semibold tracking-wide mb-3">Commission Rate</p>
         <div className="flex items-center gap-4">
           <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-3xl font-bold text-[#001e2b] tabular-nums">20</span>
-              <span className="text-xl font-bold text-[#001e2b]">%</span>
-            </div>
+            {isEditingComm ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={commRate}
+                  onChange={(e) => setCommRate(e.target.value)}
+                  className="w-20 h-9 rounded-lg border border-[#00684a] text-center text-sm px-2 focus:outline-none focus:ring-2 focus:ring-[#00684a]/30 text-[#001e2b] font-semibold"
+                />
+                <span className="text-xl font-bold text-[#001e2b]">%</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-3xl font-bold text-[#001e2b] tabular-nums">{settings.commission_rate ?? 20}</span>
+                <span className="text-xl font-bold text-[#001e2b]">%</span>
+              </div>
+            )}
             <p className="text-xs text-[#7c8c9a] mt-1">Deducted from each completed booking</p>
           </div>
-          <button className="h-9 px-4 rounded-lg border border-[#e1e5e8] text-sm text-[#5c6c7a] hover:bg-[#f4f7f6] transition-colors font-medium flex items-center gap-1.5">
-            <Pencil className="w-3.5 h-3.5" />
-            Edit Rate
-          </button>
+          {isEditingComm ? (
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveCommission}
+                className="h-9 px-4 rounded-lg bg-[#001e2b] text-sm text-white hover:bg-[#003d4f] transition-colors font-semibold flex items-center justify-center"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setIsEditingComm(false)}
+                className="h-9 px-4 rounded-lg border border-[#e1e5e8] text-sm text-[#5c6c7a] hover:bg-[#f4f7f6] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsEditingComm(true)}
+              className="h-9 px-4 rounded-lg border border-[#e1e5e8] text-sm text-[#5c6c7a] hover:bg-[#f4f7f6] transition-colors font-medium flex items-center gap-1.5"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Edit Rate
+            </button>
+          )}
         </div>
       </div>
     </div>

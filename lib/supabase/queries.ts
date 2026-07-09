@@ -284,6 +284,14 @@ export async function fetchCleaners(sb: SB): Promise<Cleaner[]> {
   })
 }
 
+export async function fetchCleanerDocuments(sb: SB, cleanerId: string): Promise<any[]> {
+  const { data } = await sb
+    .from('cleaner_documents')
+    .select('id,document_type,file_url,uploaded_at')
+    .eq('cleaner_id', cleanerId)
+  return data ?? []
+}
+
 // ─── Transactions / Payments ──────────────────────────────────────────────────
 
 export async function fetchTransactions(sb: SB): Promise<Transaction[]> {
@@ -481,26 +489,95 @@ export async function fetchAdminUsers(sb: SB): Promise<AdminUser[]> {
 // ─── KPI + Charts ────────────────────────────────────────────────────────────
 
 export async function fetchKpi(sb: SB): Promise<KPIData> {
-  const [usersRes, cleanersRes, bookingsRes, paymentsRes, bookingsAggRes] = await Promise.all([
+  const now = new Date()
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString()
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString()
+
+  const [
+    usersRes,
+    cleanersRes,
+    bookingsRes,
+    paymentsRes,
+    bookingsAggRes,
+    recentPaymentsRes,
+    recentBookingsRes,
+    recentProfilesRes
+  ] = await Promise.all([
     sb.from('profiles').select('*', { count: 'exact', head: true }).or('role.eq.client,role.eq.cleaner'),
     sb.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'cleaner').eq('status', 'active'),
     sb.from('bookings').select('*', { count: 'exact', head: true }).in('status', ['accepted', 'en_route', 'arrived', 'started']),
     sb.from('payments').select('amount,status').eq('status', 'released'),
     sb.from('bookings').select('total_price'),
+    sb.from('payments').select('amount,created_at').eq('status', 'released').gte('created_at', sixtyDaysAgo),
+    sb.from('bookings').select('created_at').gte('created_at', fourteenDaysAgo),
+    sb.from('profiles').select('role,status,created_at').or('role.eq.client,role.eq.cleaner').gte('created_at', sixtyDaysAgo),
   ])
 
   const revenue = (paymentsRes.data ?? []).reduce((s: number, p: any) => s + Number(p.amount ?? 0), 0)
   const pipeline = (bookingsAggRes.data ?? []).reduce((s: number, b: any) => s + Number(b.total_price ?? 0), 0)
 
+  // Compute Revenue Trend (last 30d vs previous 30d)
+  let revCurr = 0
+  let revPrev = 0
+  ;(recentPaymentsRes.data ?? []).forEach((p: any) => {
+    const amt = Number(p.amount ?? 0)
+    if (p.created_at >= thirtyDaysAgo) {
+      revCurr += amt
+    } else {
+      revPrev += amt
+    }
+  })
+  const revenueTrend = revPrev > 0 ? ((revCurr - revPrev) / revPrev) * 100 : 0
+
+  // Compute Bookings Trend (last 7d vs previous 7d)
+  let bkCurr = 0
+  let bkPrev = 0
+  ;(recentBookingsRes.data ?? []).forEach((b: any) => {
+    if (b.created_at >= sevenDaysAgo) {
+      bkCurr++
+    } else {
+      bkPrev++
+    }
+  })
+  const bookingsTrend = bkPrev > 0 ? ((bkCurr - bkPrev) / bkPrev) * 100 : 0
+
+  // Compute Registered Users Trend (last 30d vs previous 30d)
+  let userCurr = 0
+  let userPrev = 0
+  ;(recentProfilesRes.data ?? []).forEach((p: any) => {
+    if (p.created_at >= thirtyDaysAgo) {
+      userCurr++
+    } else {
+      userPrev++
+    }
+  })
+  const usersTrend = userPrev > 0 ? ((userCurr - userPrev) / userPrev) * 100 : 0
+
+  // Compute Active Cleaners Trend (last 30d vs previous 30d)
+  let cleanerCurr = 0
+  let cleanerPrev = 0
+  ;(recentProfilesRes.data ?? []).forEach((p: any) => {
+    if (p.role === 'cleaner' && p.status === 'active') {
+      if (p.created_at >= thirtyDaysAgo) {
+        cleanerCurr++
+      } else {
+        cleanerPrev++
+      }
+    }
+  })
+  const cleanersTrend = cleanerPrev > 0 ? ((cleanerCurr - cleanerPrev) / cleanerPrev) * 100 : 0
+
   return {
     totalRevenue: Math.round(revenue),
-    revenueTrend: 12.4,
+    revenueTrend,
     activeBookings: bookingsRes.count ?? 0,
-    bookingsTrend: -3.2,
+    bookingsTrend,
     registeredUsers: usersRes.count ?? 0,
-    usersTrend: 18.6,
+    usersTrend,
     activeCleaners: cleanersRes.count ?? 0,
-    cleanersTrend: 8.3,
+    cleanersTrend,
     pipelineValue: Math.round(pipeline),
   }
 }
@@ -746,3 +823,20 @@ export async function sendBroadcast(sb: SB, payload: {
   }
   return { error: null }
 }
+
+export async function fetchPlatformSettings(sb: SB): Promise<any> {
+  const { data } = await sb
+    .from('platform_settings')
+    .select('*')
+    .eq('id', 1)
+    .single()
+  return data
+}
+
+export async function updatePlatformSetting(sb: SB, field: string, value: any): Promise<any> {
+  return sb
+    .from('platform_settings')
+    .update({ [field]: value, updated_at: new Date().toISOString() })
+    .eq('id', 1)
+}
+

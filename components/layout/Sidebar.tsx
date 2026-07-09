@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import {
   LayoutDashboard,
@@ -41,6 +41,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false, onCollapseToggle }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [adminName, setAdmin] = useState('Admin')
   const [adminRole, setRole] = useState('Admin')
 
@@ -59,6 +60,13 @@ export function Sidebar({ collapsed = false, onCollapseToggle }: SidebarProps) {
       }
     })()
   }, [])
+
+  const handleSignOut = useCallback(async () => {
+    const sb = createClient()
+    await sb.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }, [router])
 
   return (
     <aside
@@ -141,9 +149,9 @@ export function Sidebar({ collapsed = false, onCollapseToggle }: SidebarProps) {
             </div>
           )}
           {!collapsed && (
-            <Link href="/login" className="text-white/30 hover:text-white/70 transition-colors">
+            <button onClick={handleSignOut} className="text-white/30 hover:text-white/70 transition-colors" aria-label="Sign out">
               <LogOut className="w-4 h-4" />
-            </Link>
+            </button>
           )}
         </div>
       </div>
