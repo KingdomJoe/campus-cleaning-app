@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, StyleSheet, FlatList } from "react-native";
 import { SegmentedButtons, useTheme } from "react-native-paper";
 import { router, useFocusEffect } from "expo-router";
@@ -11,7 +11,7 @@ import { colors, spacing } from "@/lib/theme";
 
 export default function BookingsListScreen() {
   const profile = useAuthStore((s) => s.profile);
-  const { activeBookings, pastBookings, isLoading, fetchClientBookings } =
+  const { activeBookings, pastBookings, isLoading, fetchClientBookings, subscribeToClientBookings } =
     useBookingStore();
   const [tab, setTab] = useState("active");
   const theme = useTheme();
@@ -22,6 +22,13 @@ export default function BookingsListScreen() {
       if (profileId) fetchClientBookings(profileId);
     }, [profileId, fetchClientBookings]),
   );
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!profileId) return;
+    const unsubscribe = subscribeToClientBookings(profileId);
+    return () => unsubscribe();
+  }, [profileId, subscribeToClientBookings]);
 
   if (isLoading) return <LoadingScreen message="Loading bookings..." />;
 

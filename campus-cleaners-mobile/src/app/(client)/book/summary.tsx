@@ -12,6 +12,7 @@ export default function BookingSummaryScreen() {
   const { form, createBooking } = useBookingStore();
   const profile = useAuthStore((s) => s.profile);
   const profileLoading = useAuthStore((s) => s.profileLoading);
+  const session = useAuthStore((s) => s.session);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -74,9 +75,10 @@ export default function BookingSummaryScreen() {
       return;
     }
 
-    if (!profile?.id) {
-      console.log('[BookingSummary] No profile found, redirecting to login');
-      showToast('Please log in to book a service', 'error');
+    // FIX: Use session.user.id instead of profile.id to prevent auth redirect race conditions
+    if (!session?.user?.id) {
+      console.log('[BookingSummary] No session user found, redirecting to login');
+      showToast('Authentication error. Please log in again.', 'error');
       router.replace('/(auth)/login');
       return;
     }
@@ -85,8 +87,8 @@ export default function BookingSummaryScreen() {
     setError('');
 
     try {
-      console.log('[BookingSummary] Creating booking with:', { clientId: profile.id, totalPrice, form });
-      const booking = await createBooking(profile.id, totalPrice);
+      console.log('[BookingSummary] Creating booking with:', { clientId: session.user.id, totalPrice, form });
+      const booking = await createBooking(session.user.id, totalPrice);
       console.log('[BookingSummary] Booking created:', booking);
       
       if (booking) {

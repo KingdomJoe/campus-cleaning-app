@@ -96,7 +96,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           .select('*')
           .eq('user_id', user.id)
           .single();
-
+        
         // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
         set({ cleanerProfile });
       }
@@ -125,6 +125,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   initialize: async () => {
+    if (get().isInitialized) return;
     try {
       set({ isLoading: true });
 
@@ -145,7 +146,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       // Listen for auth state changes
-      supabase.auth.onAuthStateChange(async (_event, session) => {
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        // Only wipe state if the user explicitly signs out
+        if (event === 'SIGNED_OUT') {
+          set({
+            session: null,
+            user: null,
+            profile: null,
+            cleanerProfile: null,
+            role: null,
+            isLoading: false,
+            profileLoading: false,
+          });
+          return;
+        }
+
         const currentSession = get().session;
         const isLoggingIn = session?.user && (!currentSession || currentSession.user.id !== session.user.id);
 
@@ -155,20 +170,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           ...(isLoggingIn ? { isLoading: true, profileLoading: true } : {}),
         });
 
-        if (session?.user) {
-          try {
-            await get().fetchProfile();
-          } finally {
-            set({ isLoading: false });
-          }
-        } else {
-          set({
-            profile: null,
-            cleanerProfile: null,
-            role: null,
-            isLoading: false,
-            profileLoading: false,
-          });
+        if (session?.user && isLoggingIn) {
+          await get().fetchProfile();
+          set({ isLoading: false });
         }
       });
     } catch (err) {

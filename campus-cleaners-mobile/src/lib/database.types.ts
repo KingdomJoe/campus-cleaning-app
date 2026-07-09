@@ -4,9 +4,9 @@
  */
 
 export type UserRole = 'client' | 'cleaner';
-export type VerificationStatus = 'pending' | 'approved' | 'rejected';
-export type UserStatus = 'active' | 'suspended';
-export type CleanerAvailability = 'available' | 'busy' | 'offline';
+type VerificationStatus = 'pending' | 'approved' | 'rejected';
+type UserStatus = 'active' | 'suspended';
+type CleanerAvailability = 'available' | 'busy' | 'offline';
 export type BookingStatus =
   | 'requested'
   | 'accepted'
@@ -19,11 +19,11 @@ export type BookingStatus =
   | 'cancelled'
   | 'declined';
 export type PaymentStatus = 'pending' | 'held' | 'released' | 'refunded';
-export type DisputeType = 'no_show' | 'poor_quality' | 'property_damage' | 'theft';
-export type DisputeStatus = 'open' | 'under_review' | 'resolved';
-export type DocumentType = 'ghana_card' | 'student_id' | 'selfie' | 'guarantor_doc';
-export type PhotoType = 'before' | 'after';
-export type ServiceCategory = 'cleaning' | 'laundry';
+type DisputeType = 'no_show' | 'poor_quality' | 'property_damage' | 'theft';
+type DisputeStatus = 'open' | 'under_review' | 'resolved';
+type DocumentType = 'ghana_card' | 'student_id' | 'selfie' | 'guarantor_doc';
+type PhotoType = 'before' | 'after';
+type ServiceCategory = 'cleaning' | 'laundry';
 
 export interface Profile {
   id: string;
@@ -60,7 +60,7 @@ export interface CleanerProfile {
   updated_at: string;
 }
 
-export interface CleanerDocument {
+interface CleanerDocument {
   id: string;
   cleaner_id: string;
   document_type: DocumentType;
@@ -157,7 +157,7 @@ export interface Payment {
   created_at: string;
 }
 
-export interface AppNotification {
+interface AppNotification {
   id: string;
   user_id: string;
   title: string;
@@ -167,7 +167,7 @@ export interface AppNotification {
   created_at: string;
 }
 
-export interface Dispute {
+interface Dispute {
   id: string;
   booking_id: string;
   raised_by: string;
@@ -178,7 +178,7 @@ export interface Dispute {
   created_at: string;
 }
 
-export interface BookingApplication {
+interface BookingApplication {
   id: string;
   booking_id: string;
   cleaner_id: string;
@@ -191,7 +191,7 @@ export interface BookingApplication {
 }
 
 // Schema types needed for Supabase type resolution
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   public: {

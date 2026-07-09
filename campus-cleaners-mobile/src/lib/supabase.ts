@@ -1,4 +1,5 @@
-import 'expo-sqlite/localStorage/install';
+import 'react-native-url-polyfill/auto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 
@@ -13,7 +14,7 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
-    storage: localStorage,
+    storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

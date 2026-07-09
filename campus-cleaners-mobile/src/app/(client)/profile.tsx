@@ -11,22 +11,10 @@ import { showToast } from '@/lib/toast';
 
 export default function ProfileScreen() {
   const theme = useTheme();
-  const { profile, signOut, fetchProfile, profileLoading } = useAuthStore();
+  const { profile, signOut, fetchProfile, profileLoading, session } = useAuthStore();
   const { themeMode, toggleTheme } = useThemeStore();
 
-  // Show loading state while profile is loading
-  if (profileLoading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <PaperText style={styles.loadingText} variant="bodyMedium">
-          Loading profile...
-        </PaperText>
-      </View>
-    );
-  }
-
-  // Edit mode state
+  // Edit mode state - MUST be before early return for hooks rules
   const [isEditing, setIsEditing] = useState(false);
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [email, setEmail] = useState(profile?.email ?? '');
@@ -43,13 +31,25 @@ export default function ProfileScreen() {
     }
   }, [profile]);
 
+  // Show loading state while profile is loading
+  if (profileLoading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <PaperText style={styles.loadingText} variant="bodyMedium">
+          Loading profile...
+        </PaperText>
+      </View>
+    );
+  }
+
   const handleSignOut = async () => {
     await signOut();
     router.replace('/(auth)/welcome');
   };
 
   const handlePickAvatar = async () => {
-    if (!profile?.id) {
+    if (!session?.user?.id) {
       showToast('Please log in to update photo', 'error');
       return;
     }
@@ -58,7 +58,7 @@ export default function ProfileScreen() {
       if (!uri) return;
 
       setIsUploadingPhoto(true);
-      const publicUrl = await uploadAvatar(profile.id, uri);
+      const publicUrl = await uploadAvatar(session.user.id, uri);
       if (publicUrl) {
         await fetchProfile();
         showToast('Profile photo updated successfully!', 'success');
@@ -74,7 +74,11 @@ export default function ProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
-    if (!profile?.id) {
+    if (!session?.user?.id) {
+      showToast('Authentication error. Please log in again.', 'error');
+      return;
+    }
+    if (!profile) {
       showToast('Profile not loaded. Please wait...', 'error');
       return;
     }
@@ -118,7 +122,7 @@ export default function ProfileScreen() {
         .from('profiles')
         // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
         .update(updates)
-        .eq('id', profile.id);
+        .eq('id', session.user.id);
 
       if (error) throw error;
 

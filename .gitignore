@@ -1,6 +1,17 @@
 node_modules/
 .env
-db/*.db
-db/*.db-shm
-db/*.db-wal
+.env*.local
 .gemini/
+
+# Debug screenshots and logs
+*.png
+expo_err.txt
+expo_out.txt
+
+# IDE
+.idea/
+.vscode/
+
+# Build artifacts
+.next/
+dist/

@@ -26,6 +26,7 @@ export default function JobsListScreen() {
     isLoading,
     fetchCleanerJobs,
     fetchAvailableJobs,
+    subscribeToAvailableJobs,
   } = useBookingStore();
   const [tab, setTab] = useState("available");
   const theme = useTheme();
@@ -67,7 +68,9 @@ export default function JobsListScreen() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       loadDocuments();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Realtime subscription
+    const unsubscribe = subscribeToAvailableJobs();
+    return () => unsubscribe();
   }, [profile?.id]);
 
   if (isLoading) return <LoadingScreen message="Loading jobs..." />;

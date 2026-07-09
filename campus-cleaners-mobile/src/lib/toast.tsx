@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useState, useCallback, useRef } from 'react';
 import { Snackbar } from 'react-native-paper';
 
 interface ToastContextType {
@@ -58,14 +58,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       </Snackbar>
     </ToastContext.Provider>
   );
-}
-
-export function useToast() {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return context.showToast;
 }
 
 // For backward compatibility - simple function that logs to console

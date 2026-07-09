@@ -50,43 +50,6 @@ export async function submitReview(params: {
 }
 
 /**
- * Fetch reviews for a cleaner.
- */
-export async function fetchCleanerReviews(cleanerId: string): Promise<Review[]> {
-  const { data, error } = await supabase
-    .from('reviews')
-    .select(`
-      *,
-      client:profiles!reviews_client_id_fkey(full_name, avatar_url)
-    `)
-    .eq('cleaner_id', cleanerId)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching reviews:', error.message);
-    return [];
-  }
-
-  // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
-  return data ?? [];
-}
-
-/**
- * Fetch the review for a specific booking.
- */
-export async function fetchBookingReview(bookingId: string): Promise<Review | null> {
-  const { data, error } = await supabase
-    .from('reviews')
-    .select('*')
-    .eq('booking_id', bookingId)
-    .single();
-
-  if (error) return null;
-  // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
-  return data;
-}
-
-/**
  * Recalculate and update a cleaner's average rating.
  */
 async function updateCleanerAvgRating(cleanerId: string) {

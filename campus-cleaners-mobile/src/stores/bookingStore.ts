@@ -51,6 +51,11 @@ interface BookingState {
   applyForJob: (bookingId: string, cleanerId: string) => Promise<boolean>;
   fetchBookingApplications: (bookingId: string) => Promise<any[]>;
   hireCleaner: (bookingId: string, appId: string, cleanerId: string) => Promise<boolean>;
+  rejectCleaner: (appId: string) => Promise<boolean>;
+  
+  // Realtime subscriptions
+  subscribeToAvailableJobs: () => () => void;
+  subscribeToClientBookings: (clientId: string) => () => void;
 }
 
 const initialForm: BookingFormState = {
@@ -582,5 +587,51 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       console.error('Error hiring cleaner:', err);
       return false;
     }
+  },
+
+  rejectCleaner: async (appId) => {
+    try {
+      const { error } = await supabase
+        .from('booking_applications')
+        .update({ status: 'declined' })
+        .eq('id', appId);
+      return !error;
+    } catch {
+      return false;
+    }
+  },
+
+  subscribeToAvailableJobs: () => {
+    const channel = supabase
+      .channel('available-jobs-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => {
+          get().fetchAvailableJobs();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
+
+  subscribeToClientBookings: (clientId) => {
+    const channel = supabase
+      .channel(`client-bookings-${clientId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `client_id=eq.${clientId}` },
+        () => {
+          get().fetchClientBookings(clientId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   },
 }));

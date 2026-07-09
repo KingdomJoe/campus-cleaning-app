@@ -6,7 +6,7 @@ const fontConfig = {
 };
 
 // Light theme colors
-export const lightColors = {
+const lightColors = {
   primary: '#00b545',
   primaryLight: '#00ed64',
   primaryDark: '#00684a',
@@ -61,7 +61,7 @@ export const lightColors = {
 } as const;
 
 // Dark theme colors
-export const darkColors = {
+const darkColors = {
   primary: '#00ed64',
   primaryLight: '#c3f0d2',
   primaryDark: '#00b545',
@@ -197,7 +197,7 @@ export const darkTheme: MD3Theme = {
 };
 
 // Export fallback theme as lightTheme
-export const theme = lightTheme;
+const theme = lightTheme;
 
 export const spacing = {
   xs: 4,

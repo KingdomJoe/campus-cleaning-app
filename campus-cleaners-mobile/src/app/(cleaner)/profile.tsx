@@ -48,22 +48,11 @@ const UCC_AREAS = [
 
 export default function CleanerProfileScreen() {
   "use no memo"; // Opt out: form-sync effects and async document loading call setState in effects
-  const { profile, cleanerProfile, signOut, fetchProfile, profileLoading } = useAuthStore();
+  const { session, profile, cleanerProfile, signOut, fetchProfile, profileLoading } = useAuthStore();
   const { themeMode, toggleTheme } = useThemeStore();
   const theme = useTheme();
 
-  // Show loading state while profile is loading
-  if (profileLoading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <PaperText style={styles.loadingText} variant="bodyMedium">
-          Loading profile...
-        </PaperText>
-      </View>
-    );
-  }
-
+  // Edit Mode States - MUST be before early return for hooks rules
   // Edit Mode States (Work Details)
   const [isEditing, setIsEditing] = useState(false);
   const [bio, setBio] = useState(cleanerProfile?.bio ?? "");
@@ -76,14 +65,6 @@ export default function CleanerProfileScreen() {
   );
   const [skills, setSkills] = useState<string[]>(cleanerProfile?.skills ?? []);
 
-  const toggleSkill = (skill: string) => {
-    setSkills((prev) =>
-      prev.includes(skill)
-        ? prev.filter((s) => s !== skill)
-        : [...prev, skill]
-    );
-  };
-
   // Edit Mode States (Personal Info & Neighborhood Location)
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
@@ -93,6 +74,19 @@ export default function CleanerProfileScreen() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  const [documents, setDocuments] = useState<Record<string, string | null>>({
+    ghana_card: null,
+    selfie: null,
+  });
+
+  const toggleSkill = (skill: string) => {
+    setSkills((prev) =>
+      prev.includes(skill)
+        ? prev.filter((s) => s !== skill)
+        : [...prev, skill]
+    );
+  };
 
   // Sync personal info state with store profile updates
   useEffect(() => {
@@ -119,11 +113,6 @@ export default function CleanerProfileScreen() {
       setSkills(cleanerProfile.skills ?? []);
     }
   }, [cleanerProfile]);
-
-  const [documents, setDocuments] = useState<Record<string, string | null>>({
-    ghana_card: null,
-    selfie: null,
-  });
 
   const loadDocuments = async () => {
     if (!profile?.id) return;
@@ -260,13 +249,13 @@ export default function CleanerProfileScreen() {
         ];
 
   const handlePickAvatar = async () => {
-    if (!profile?.id) return;
+    if (!session?.user?.id) return;
     try {
       const uri = await pickImage({ aspect: [1, 1] });
       if (!uri) return;
 
       setIsUploadingPhoto(true);
-      const publicUrl = await uploadAvatar(profile.id, uri);
+      const publicUrl = await uploadAvatar(session.user.id, uri);
       if (publicUrl) {
         await fetchProfile();
         showToast('Profile photo updated successfully!', 'success');
@@ -282,8 +271,8 @@ export default function CleanerProfileScreen() {
   };
 
   const handleSaveDetails = async () => {
-    if (!profile?.id) {
-      showToast('Profile not loaded. Please wait...', 'error');
+    if (!session?.user?.id) {
+      showToast('Authentication error. Please log in again.', 'error');
       return;
     }
     setIsSaving(true);
@@ -305,7 +294,7 @@ export default function CleanerProfileScreen() {
       }
 
       // Calculate mock completion percentage with local edits to decide if status goes to pending
-      const willHavePhoto = !!profile.avatar_url;
+      const willHavePhoto = !!profile?.avatar_url;
       const willHaveBio = !!bio.trim();
       const willHaveMomo = !!momo.trim();
       const willHaveSkills = skills.length > 0;
@@ -338,7 +327,7 @@ export default function CleanerProfileScreen() {
           skills: skills,
           ...(autoPending ? { verification_status: "pending" } : {}),
         })
-        .eq("user_id", profile.id);
+        .eq("user_id", session.user.id);
 
       if (error) throw error;
 
@@ -354,8 +343,8 @@ export default function CleanerProfileScreen() {
   };
 
   const handleSavePersonal = async () => {
-    if (!profile?.id) {
-      showToast('Profile not loaded. Please wait...', 'error');
+    if (!session?.user?.id) {
+      showToast('Authentication error. Please log in again.', 'error');
       return;
     }
     if (!fullName.trim()) {
@@ -387,7 +376,7 @@ export default function CleanerProfileScreen() {
           email: email.trim() || null,
           location: locationStr.trim() || null,
         } as any)
-        .eq("id", profile.id);
+        .eq("id", session.user.id);
 
       if (error) throw error;
 

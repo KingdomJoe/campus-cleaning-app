@@ -4,7 +4,7 @@ import PostHog from 'posthog-react-native';
 const POSTHOG_API_KEY = 'phc_CampusCleanersGhanaMVP2026MockKey';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
 
-export const posthog = new PostHog(POSTHOG_API_KEY, {
+const posthog = new PostHog(POSTHOG_API_KEY, {
   host: POSTHOG_HOST,
 });
 

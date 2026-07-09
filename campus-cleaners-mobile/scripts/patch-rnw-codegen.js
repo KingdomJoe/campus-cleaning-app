@@ -40,7 +40,7 @@ function patchFile(filePath, stub) {
 
 console.log('Patching react-native-web for codegenNativeComponent...');
 
-const rnwDist = path.join(__dirname, 'node_modules', 'react-native-web', 'dist');
+const rnwDist = path.join(__dirname, '..', 'node_modules', 'react-native-web', 'dist');
 patchFile(path.join(rnwDist, 'index.js'), ESM_STUB);
 patchFile(path.join(rnwDist, 'cjs', 'index.js'), CJS_STUB);
 
