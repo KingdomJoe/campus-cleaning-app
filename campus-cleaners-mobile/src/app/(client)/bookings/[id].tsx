@@ -11,6 +11,7 @@ import StatusBadge from '@/components/StatusBadge';
 import LoadingScreen from '@/components/LoadingScreen';
 import StarRating from '@/components/StarRating';
 import { colors, spacing, borderRadius } from '@/lib/theme';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function BookingDetailScreen() {
   const theme = useTheme();
@@ -103,18 +104,56 @@ export default function BookingDetailScreen() {
   const canChat = !['cancelled', 'declined', 'closed'].includes(booking.status);
 
   const handleVerify = async () => {
-    // Release escrow payment
-    try {
-      const payment = await fetchBookingPayment(booking.id);
-      if (payment) {
-        await releasePayment(payment.id);
-      }
-    } catch (err) {
-      console.error('Error fetching/releasing payment during verification:', err);
-    }
+    if (!booking) return;
 
-    const success = await updateBookingStatus(booking.id, 'verified');
-    if (success) loadBooking();
+    const clientEmail = (booking as any).client?.email || profile?.email || 'client@campusclean.com';
+    const amount = Number(booking.total_price);
+
+    Alert.alert(
+      'Verify & Pay Cleaner',
+      `You are about to verify the cleaning job. This will initiate a Paystack payment of GH₵${amount} to pay the cleaner. Do you wish to proceed?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Proceed to Pay',
+          onPress: async () => {
+            setIsLoading(true);
+            try {
+              // 1. Initialize Paystack on Next.js backend endpoint
+              const response = await fetch('https://admin-dashboard-ufc.vercel.app/api/paystack/initialize', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  bookingId: booking.id,
+                  email: clientEmail,
+                  amount: amount,
+                }),
+              });
+
+              const resData = await response.json();
+              setIsLoading(false);
+
+              if (!response.ok || !resData.authorization_url) {
+                Alert.alert('Payment Error', resData.error || 'Failed to initialize payment.');
+                return;
+              }
+
+              // 2. Open Paystack authorization_url in-app browser
+              await WebBrowser.openBrowserAsync(resData.authorization_url);
+
+              // 3. Refresh booking after returning to check if payment succeeded & webhook updated database
+              loadBooking();
+            } catch (err: any) {
+              setIsLoading(false);
+              console.error('Paystack initialization error:', err);
+              Alert.alert('Payment Error', 'An unexpected error occurred during payment.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleCancel = async () => {
