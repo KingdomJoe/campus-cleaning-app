@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         email,
         amount: amountInKobo,
-        callback_url: `https://admin-dashboard-ufc.vercel.app/admin/payments`, // Return URL
+        callback_url: `uberforcleaning://(client)/bookings/${bookingId}`, // Deep link back to Expo mobile app
         metadata: {
           booking_id: bookingId,
         },
