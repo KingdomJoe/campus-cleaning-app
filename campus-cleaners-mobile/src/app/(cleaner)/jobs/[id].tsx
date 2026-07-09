@@ -23,6 +23,7 @@ export default function JobDetailScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const profile = useAuthStore((s) => s.profile);
+  const cleanerProfile = useAuthStore((s) => s.cleanerProfile);
   const { updateBookingStatus, applyForJob, cancelBooking } = useBookingStore();
   const [booking, setBooking] = useState<Booking | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,6 +33,46 @@ export default function JobDetailScreen() {
   const [loadingApp, setLoadingApp] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState('Emergency');
+  const [documents, setDocuments] = useState<Record<string, string | null>>({
+    ghana_card: null,
+    selfie: null,
+  });
+
+  // Profile completion (mirrors jobs list: 100% required to apply)
+  const hasPhoto = !!profile?.avatar_url;
+  const hasBio = !!cleanerProfile?.bio?.trim();
+  const hasMomo = !!cleanerProfile?.mobile_money_number?.trim();
+  const hasSkills = !!(
+    cleanerProfile?.skills && cleanerProfile.skills.length > 0
+  );
+  const hasGuarantor = !!(
+    cleanerProfile?.guarantor_name?.trim() &&
+    cleanerProfile?.guarantor_phone?.trim()
+  );
+  const hasGhanaCard = !!documents.ghana_card;
+  const hasSelfie = !!documents.selfie;
+  const isProfileComplete =
+    hasPhoto && hasBio && hasMomo && hasSkills && hasGuarantor && hasGhanaCard && hasSelfie;
+  const isApproved = cleanerProfile?.verification_status === 'approved';
+  const canApply = isApproved && isProfileComplete;
+
+  const loadDocuments = async () => {
+    if (!profile?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from('cleaner_documents')
+        .select('document_type, file_url')
+        .eq('cleaner_id', profile.id);
+      if (error) throw error;
+      const docsMap: Record<string, string | null> = { ghana_card: null, selfie: null };
+      data?.forEach((doc) => {
+        docsMap[doc.document_type] = doc.file_url;
+      });
+      setDocuments(docsMap);
+    } catch (err) {
+      console.error('Error loading documents in job detail:', err);
+    }
+  };
 
   const loadBooking = async () => {
     if (!id) return;
@@ -75,17 +116,45 @@ export default function JobDetailScreen() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadBooking();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Realtime: reflect client hire/decline and status changes live.
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`cleaner-job-detail-${id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `id=eq.${id}` },
+        () => loadBooking()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'booking_applications', filter: `booking_id=eq.${id}` },
+        () => loadBooking()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleApply = async () => {
     if (!booking || !profile) return;
 
-    // Security check: only verified cleaners can apply for jobs
-    const cleanerProfile = useAuthStore.getState().cleanerProfile;
-    const isApproved = cleanerProfile?.verification_status === 'approved';
-    if (!isApproved) {
-      Alert.alert('Not Verified', 'Your cleaner profile must be verified by an admin before applying for jobs.');
+    // Security check: only approved cleaners with a complete profile can apply.
+    // (Also enforced in the DB via RLS — booking_applications INSERT policy.)
+    if (!canApply) {
+      Alert.alert(
+        'Profile Required',
+        isApproved
+          ? 'Complete your cleaner profile (photo, bio, mobile money, skills, guarantor, and ID/selfie documents) before applying for jobs.'
+          : 'Your cleaner profile must be verified by an admin before applying for jobs.'
+      );
       return;
     }
 
@@ -257,7 +326,7 @@ export default function JobDetailScreen() {
             >
               {appStatus === 'declined' ? 'Application Declined' : 'Applied - Awaiting Client Choice'}
             </Button>
-          ) : (
+          ) : canApply ? (
             <Button
               mode="contained"
               icon="hand-pointing-right"
@@ -272,6 +341,27 @@ export default function JobDetailScreen() {
             >
               Apply for Job
             </Button>
+          ) : (
+            <View style={styles.actionBtn}>
+              <Button
+                mode="contained"
+                disabled
+                buttonColor={theme.colors.outline}
+                textColor={theme.colors.onSurface}
+                contentStyle={styles.actionBtnContent}
+                labelStyle={styles.actionBtnLabel}
+              >
+                {isApproved ? 'Complete Profile to Apply' : 'Verification Required to Apply'}
+              </Button>
+              <Text
+                style={[styles.applyHint, { color: theme.colors.onSurfaceVariant }]}
+                variant="bodySmall"
+              >
+                {isApproved
+                  ? 'Finish your profile so you can apply for this job.'
+                  : 'You can view this job, but applying requires admin verification.'}
+              </Text>
+            </View>
           )
         )}
 
@@ -396,6 +486,7 @@ const styles = StyleSheet.create({
   actions: { gap: spacing.md },
   actionBtn: { borderRadius: 12 },
   actionBtnContent: { paddingVertical: 6 },
+  applyHint: { textAlign: 'center', marginTop: spacing.xs },
   actionBtnLabel: { fontSize: 16, fontWeight: '700' },
   dialogRadioRow: {
     flexDirection: 'row',

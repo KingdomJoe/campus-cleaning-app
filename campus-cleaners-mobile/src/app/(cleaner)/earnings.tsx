@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { View, StyleSheet, ScrollView } from "react-native";
 import { Text, Card, useTheme } from "react-native-paper";
 import { useFocusEffect } from "expo-router";
 import { useAuthStore } from "@/stores/authStore";
 import { fetchCleanerEarnings } from "@/lib/api/payments";
+import { supabase } from "@/lib/supabase";
 import type { Payment } from "@/lib/database.types";
 import { colors, spacing, borderRadius } from "@/lib/theme";
 
@@ -26,6 +27,25 @@ export default function EarningsScreen() {
       }
     }, [profileId]),
   );
+
+  // Real-time: reflect held/released/refunded payments as they change.
+  useEffect(() => {
+    if (!profileId) return;
+    const channel = supabase
+      .channel(`cleaner-payments-${profileId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payments', filter: `cleaner_id=eq.${profileId}` },
+        () => {
+          // @ts-expect-error - workaround for TS6 + supabase-js generic constraint
+          fetchCleanerEarnings(profileId).then(setEarnings);
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profileId]);
 
   const statusColor = (status: string) =>
     status === "released"

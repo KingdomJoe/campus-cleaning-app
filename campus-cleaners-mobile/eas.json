@@ -5,7 +5,11 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gvdgpgjedzgxoettqgkd.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2ZGdwZ2plZHpneG9ldHRxZ2tkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5Nzk3OTAsImV4cCI6MjA5NzU1NTc5MH0.jB-afC6OXo0u3ok3kLnkLBohPONtJQ5_DET5iv6Hwew"
+      }
     },
     "preview": {
       "distribution": "internal",

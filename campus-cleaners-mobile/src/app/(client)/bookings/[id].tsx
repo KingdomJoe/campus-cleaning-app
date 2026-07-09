@@ -72,6 +72,28 @@ export default function BookingDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Realtime: reflect cleaner applications and status changes live.
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`client-booking-detail-${id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `id=eq.${id}` },
+        () => loadBooking()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'booking_applications', filter: `booking_id=eq.${id}` },
+        () => loadBooking()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   if (isLoading) return <LoadingScreen />;
   if (!booking) return <LoadingScreen message="Booking not found" />;
 

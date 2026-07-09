@@ -7,7 +7,8 @@ import { lightTheme, darkTheme } from "@/lib/theme";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { setupNotificationResponseHandler } from "@/lib/notifications";
-import { ToastProvider } from "@/lib/toast";
+import { ToastProvider, showToast } from "@/lib/toast";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 export default function RootLayout() {
   const initialize = useAuthStore((s) => s.initialize);
@@ -43,6 +44,32 @@ export default function RootLayout() {
     }
   }, [session]);
 
+  // Surface uncaught native/JS errors as on-screen toasts so failures are
+  // never silent on preview/production builds.
+  useEffect(() => {
+    const report = (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      showToast(`Error: ${msg}`, 'error', 8000);
+      console.error('[GlobalError]', err);
+    };
+
+    const g: any = (globalThis as any).ErrorUtils;
+    let prevHandler: ((err: unknown, isFatal?: boolean) => void) | null = null;
+    if (g && typeof g.setGlobalHandler === 'function') {
+      prevHandler = g.getGlobalHandler?.();
+      g.setGlobalHandler((err: unknown, isFatal?: boolean) => {
+        report(err);
+        if (prevHandler) prevHandler(err, isFatal);
+      });
+    }
+
+    return () => {
+      if (g && typeof g.setGlobalHandler === 'function' && prevHandler) {
+        g.setGlobalHandler(prevHandler);
+      }
+    };
+  }, []);
+
   const activeTheme = themeMode === "dark" ? darkTheme : lightTheme;
 
   return (
@@ -50,19 +77,21 @@ export default function RootLayout() {
       <PaperProvider theme={activeTheme}>
         <StatusBar style={themeMode === "dark" ? "light" : "dark"} />
         <ToastProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: activeTheme.colors.background },
-              animation: "slide_from_right",
-            }}
-          >
-            <Stack.Screen name="index" />
-            <Stack.Screen name="auth/callback" options={{ animation: "fade" }} />
-            <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-            <Stack.Screen name="(client)" options={{ animation: "fade" }} />
-            <Stack.Screen name="(cleaner)" options={{ animation: "fade" }} />
-          </Stack>
+          <ErrorBoundary>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: activeTheme.colors.background },
+                animation: "slide_from_right",
+              }}
+            >
+              <Stack.Screen name="index" />
+              <Stack.Screen name="auth/callback" options={{ animation: "fade" }} />
+              <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+              <Stack.Screen name="(client)" options={{ animation: "fade" }} />
+              <Stack.Screen name="(cleaner)" options={{ animation: "fade" }} />
+            </Stack>
+          </ErrorBoundary>
         </ToastProvider>
       </PaperProvider>
     </SafeAreaProvider>

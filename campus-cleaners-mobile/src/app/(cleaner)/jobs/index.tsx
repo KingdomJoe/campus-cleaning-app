@@ -27,6 +27,7 @@ export default function JobsListScreen() {
     fetchCleanerJobs,
     fetchAvailableJobs,
     subscribeToAvailableJobs,
+    subscribeToCleanerJobs,
   } = useBookingStore();
   const [tab, setTab] = useState("available");
   const theme = useTheme();
@@ -68,9 +69,13 @@ export default function JobsListScreen() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       loadDocuments();
     }
-    // Realtime subscription
-    const unsubscribe = subscribeToAvailableJobs();
-    return () => unsubscribe();
+    // Realtime subscriptions: live available jobs + own active/completed jobs
+    const unsubAvailable = subscribeToAvailableJobs();
+    const unsubMine = profile?.id ? subscribeToCleanerJobs(profile.id) : () => {};
+    return () => {
+      unsubAvailable();
+      unsubMine();
+    };
   }, [profile?.id]);
 
   if (isLoading) return <LoadingScreen message="Loading jobs..." />;
@@ -218,7 +223,7 @@ export default function JobsListScreen() {
         buttons={[
           {
             value: "available",
-            label: `New (${isApproved && !isProfileIncomplete ? availableJobs.length : "—"})`,
+            label: `New (${availableJobs.length})`,
             style: styles.segBtn,
           },
           {
@@ -237,23 +242,7 @@ export default function JobsListScreen() {
       />
 
       {tab === "available" ? (
-        isProfileIncomplete || !isApproved ? (
-          <EmptyState
-            icon={isProfileIncomplete ? "📋" : "⏳"}
-            title={
-              isProfileIncomplete
-                ? "Finish your profile to see jobs"
-                : "Waiting for admin approval"
-            }
-            subtitle={
-              isProfileIncomplete
-                ? "Tap the banner above to complete your profile"
-                : "You will be notified once approved"
-            }
-          />
-        ) : (
-          renderAvailableJobsTab()
-        )
+        renderAvailableJobsTab()
       ) : (
         <FlatList
           data={dataMap[tab]}

@@ -56,6 +56,7 @@ interface BookingState {
   // Realtime subscriptions
   subscribeToAvailableJobs: () => () => void;
   subscribeToClientBookings: (clientId: string) => () => void;
+  subscribeToCleanerJobs: (cleanerId: string) => () => void;
 }
 
 const initialForm: BookingFormState = {
@@ -626,6 +627,23 @@ export const useBookingStore = create<BookingState>((set, get) => ({
         { event: '*', schema: 'public', table: 'bookings', filter: `client_id=eq.${clientId}` },
         () => {
           get().fetchClientBookings(clientId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
+
+  subscribeToCleanerJobs: (cleanerId) => {
+    const channel = supabase
+      .channel(`cleaner-jobs-${cleanerId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings', filter: `cleaner_id=eq.${cleanerId}` },
+        () => {
+          get().fetchCleanerJobs(cleanerId);
         }
       )
       .subscribe();

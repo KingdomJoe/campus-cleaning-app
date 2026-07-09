@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useState, useCallback, useRef, useEffect } from 'react';
 import { Snackbar } from 'react-native-paper';
 
 interface ToastContextType {
@@ -7,6 +7,23 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | null>(null);
 
+export type ToastType = 'success' | 'error' | 'info';
+type EmitFn = (message: string, type: ToastType, duration: number) => void;
+
+// Module-level listener so the standalone showToast() (used by all screens)
+// actually triggers the Snackbar rendered by ToastProvider, without every
+// call site needing the React context.
+let emitToast: EmitFn | null = null;
+
+export function showToast(message: string, type: ToastType = 'info', duration: number = 3000) {
+  if (emitToast) {
+    emitToast(message, type, duration);
+  } else {
+    // Provider not mounted yet (e.g. very early). Fall back to console.
+    console.log(`[Toast] ${type.toUpperCase()}: ${message}`);
+  }
+}
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState('');
@@ -14,34 +31,39 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [duration, setDuration] = useState(3000);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'info', dur: number = 3000) => {
-    // Clear any existing timer
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
+  useEffect(() => {
+    emitToast = (msg: string, type: ToastType, dur: number) => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
 
-    setMessage(msg);
-    setBackgroundColor(type === 'success' ? '#00C896' : type === 'error' ? '#FF4D4F' : '#1E90FF');
-    setDuration(dur);
-    setVisible(true);
+      setMessage(msg);
+      setBackgroundColor(
+        type === 'success' ? '#00C896' : type === 'error' ? '#FF4D4F' : '#1E90FF'
+      );
+      setDuration(dur);
+      setVisible(true);
 
-    // Auto-dismiss after duration
-    timerRef.current = setTimeout(() => {
-      setVisible(false);
-    }, dur);
-  }, []);
+      timerRef.current = setTimeout(() => {
+        setVisible(false);
+      }, dur);
+    };
 
-  // Cleanup timer on unmount
-  React.useEffect(() => {
     return () => {
+      emitToast = null;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
     };
   }, []);
 
+  // Expose the context variant too (for screens that may use the hook).
+  const showToastCb = useCallback((msg: string, type: ToastType = 'info', dur = 3000) => {
+    showToast(msg, type, dur);
+  }, []);
+
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast: showToastCb }}>
       {children}
       <Snackbar
         visible={visible}
@@ -58,9 +80,4 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       </Snackbar>
     </ToastContext.Provider>
   );
-}
-
-// For backward compatibility - simple function that logs to console
-export function showToast(message: string, type: 'success' | 'error' | 'info' = 'info', duration: number = 3000) {
-  console.log(`[Toast] ${type.toUpperCase()}: ${message}`);
 }

@@ -6,13 +6,13 @@ RETURNS TRIGGER AS $$
 DECLARE
   new_role TEXT;
 BEGIN
-  new_role := COALESCE(NEW.user_metadata->>'role', NEW.raw_user_meta_data->>'role', 'client');
+  new_role := COALESCE(NEW.raw_user_meta_data->>'role', NEW.raw_user_meta_data->>'role', 'client');
   
   INSERT INTO public.profiles (id, full_name, phone, email, role, registered_as_client, registered_as_cleaner)
   VALUES (
     NEW.id,
-    COALESCE(NEW.user_metadata->>'full_name', NEW.raw_user_meta_data->>'full_name', ''),
-    NULLIF(COALESCE(NEW.phone, NEW.user_metadata->>'phone', NEW.raw_user_meta_data->>'phone', ''), ''),
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'full_name', ''),
+    NULLIF(COALESCE(NEW.phone, NEW.raw_user_meta_data->>'phone', NEW.raw_user_meta_data->>'phone', ''), ''),
     COALESCE(NEW.email, ''),
     new_role,
     TRUE,
