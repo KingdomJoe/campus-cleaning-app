@@ -64,6 +64,7 @@ export function Sidebar({ collapsed = false, onCollapseToggle }: SidebarProps) {
   const handleSignOut = useCallback(async () => {
     const sb = createClient()
     await sb.auth.signOut()
+    document.cookie = "admin_bypass_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"
     router.push('/login')
     router.refresh()
   }, [router])

@@ -51,6 +51,7 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
   async function handleSignOut() {
     const sb = createClient()
     await sb.auth.signOut()
+    document.cookie = "admin_bypass_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"
     router.push('/login')
     router.refresh()
   }
