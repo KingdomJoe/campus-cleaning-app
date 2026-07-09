@@ -4,7 +4,7 @@ node_modules/
 .gemini/
 
 # Debug screenshots and logs
-/*.png
+*.png
 expo_err.txt
 expo_out.txt
 

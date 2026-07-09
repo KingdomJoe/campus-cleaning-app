@@ -1,0 +1,97 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --font-sans: 'Inter', 'Inter Fallback', system-ui, sans-serif;
+
+  --color-brand-green: #00ed64;
+  --color-brand-dark: #00684a;
+  --color-brand-pressed: #008c34;
+  --color-brand-on-green: #001e2b;
+  --color-brand-teal: #001e2b;
+  --color-brand-teal-mid: #003d4f;
+  --color-brand-teal-light: #00684a;
+
+  --color-canvas: #ffffff;
+  --color-surface: #f9fbfa;
+  --color-surface-soft: #f4f7f6;
+
+  --color-hairline: #e1e5e8;
+  --color-hairline-strong: #c1ccd6;
+
+  --color-ink: #001e2b;
+  --color-slate: #3d4f5b;
+  --color-steel: #5c6c7a;
+  --color-stone: #7c8c9a;
+  --color-muted: #a8b3bc;
+
+  --color-accent-purple: #7b3ff2;
+  --color-accent-orange: #fa6e39;
+  --color-accent-blue: #3d4f9f;
+  --color-accent-green: #00ed64;
+
+  --radius-pill: 9999px;
+  --radius-card: 12px;
+  --radius-input: 8px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background-color: var(--color-surface);
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numbers for data/metrics */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #c1ccd6;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7c8c9a;
+}
+
+/* Sidebar active state */
+.sidebar-item-active {
+  background: rgba(0, 237, 100, 0.08);
+  border-left: 3px solid #00ed64;
+}
+
+/* Smooth transitions */
+.transition-base {
+  transition: all 150ms ease;
+}
+
+/* Card hover */
+.card-hover:hover {
+  box-shadow: 0px 8px 24px rgba(0, 30, 43, 0.12);
+  transform: translateY(-1px);
+}
