@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "Uber for Cleaning",
-    "slug": "ufcxucc",
+    "slug": "uber-for-cleaning",
+    "owner": "kingdomjoe",
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -79,7 +80,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "6353ad07-de9a-41bc-981f-c8a3eb6e46a7"
+        "projectId": "a8a0b997-82ac-47cc-b652-a3d3540a4d61"
       }
     }
   }
