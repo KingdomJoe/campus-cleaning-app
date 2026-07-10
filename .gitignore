@@ -4,7 +4,11 @@ node_modules/
 .gemini/
 
 # Debug screenshots and logs
-*.png
+# NOTE: Do NOT blanket-ignore *.png — it excludes app icons/assets from the
+# EAS Build upload archive and breaks prebuild (missing icon.png). Only ignore
+# root-level debug screenshots explicitly.
+/debug-*.png
+/screenshot-*.png
 expo_err.txt
 expo_out.txt
 
