@@ -22,13 +22,37 @@ export default function LoginPage() {
       return
     }
     setLoading(true)
-    // Simulate successful login
-    setTimeout(() => {
+
+    const supabase = createClient()
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+
+    if (signInError || !data.user) {
       setLoading(false)
-      document.cookie = "admin_bypass_session=true; path=/; max-age=86400; SameSite=Lax"
-      router.push('/admin/overview')
-      router.refresh()
-    }, 500)
+      setError(signInError?.message ?? 'Invalid email or password.')
+      return
+    }
+
+    // Ensure the signed-in user is an admin before granting access.
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single()
+
+    const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
+    if (!isAdmin) {
+      await supabase.auth.signOut()
+      setLoading(false)
+      setError('This account does not have admin access.')
+      return
+    }
+
+    setLoading(false)
+    router.push('/admin/overview')
+    router.refresh()
   }
 
   return (

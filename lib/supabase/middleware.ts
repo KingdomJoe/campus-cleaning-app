@@ -31,55 +31,45 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
-  const hasBypassCookie = request.cookies.get('admin_bypass_session')?.value === 'true'
 
   // Protect /admin routes (except the login page itself).
   if (pathname.startsWith('/admin') && pathname !== '/login') {
-    if (!user && !hasBypassCookie) {
+    if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
     }
 
-    if (user && !hasBypassCookie) {
-      // Ensure the signed-in user is an admin.
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
+    // Ensure the signed-in user is an admin.
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
 
-      const isAdmin =
-        profile?.role === 'admin' || profile?.role === 'super_admin'
+    const isAdmin =
+      profile?.role === 'admin' || profile?.role === 'super_admin'
 
-      if (!isAdmin) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/login'
-        return NextResponse.redirect(url)
-      }
+    if (!isAdmin) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
     }
   }
 
   // Redirect authenticated admins away from the login page.
-  if (pathname === '/login') {
-    if (hasBypassCookie) {
+  if (pathname === '/login' && user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    const isAdmin =
+      profile?.role === 'admin' || profile?.role === 'super_admin'
+    if (isAdmin) {
       const url = request.nextUrl.clone()
       url.pathname = '/admin/overview'
       return NextResponse.redirect(url)
-    }
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-      const isAdmin =
-        profile?.role === 'admin' || profile?.role === 'super_admin'
-      if (isAdmin) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/admin/overview'
-        return NextResponse.redirect(url)
-      }
     }
   }
 
