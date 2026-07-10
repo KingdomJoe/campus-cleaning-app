@@ -6,7 +6,11 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { lightTheme, darkTheme } from "@/lib/theme";
 import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
-import { setupNotificationResponseHandler } from "@/lib/notifications";
+import {
+  setupNotificationResponseHandler,
+  registerForPushNotifications,
+  savePushToken,
+} from "@/lib/notifications";
 import { ToastProvider, showToast } from "@/lib/toast";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
@@ -17,8 +21,6 @@ export default function RootLayout() {
 
   const registerPushToken = async (userId: string) => {
     try {
-      const { registerForPushNotifications, savePushToken } =
-        await import("@/lib/notifications");
       const token = await registerForPushNotifications();
       if (token) {
         await savePushToken(userId, token);

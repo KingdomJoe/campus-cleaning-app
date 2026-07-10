@@ -5,6 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 import { submitReview } from '@/lib/api/reviews';
+import { trackEvent } from '@/lib/analytics';
 import StarRating from '@/components/StarRating';
 import { colors, spacing, borderRadius } from '@/lib/theme';
 
@@ -62,7 +63,6 @@ export default function RateScreen() {
     setIsLoading(false);
     if (review) {
       try {
-        const { trackEvent } = await import('@/lib/analytics');
         trackEvent('review_submitted', {
           bookingId: bookingId,
           cleanerId: cleanerId,

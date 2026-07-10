@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import { initiatePayment, releasePayment, fetchBookingPayment } from '@/lib/api/payments';
+import { createNotification } from '@/lib/notifications';
 import type { Booking } from '@/lib/database.types';
 import StatusBadge from '@/components/StatusBadge';
 import LoadingScreen from '@/components/LoadingScreen';
@@ -216,7 +217,6 @@ export default function BookingDetailScreen() {
               const app = applications.find((a) => a.id === appId);
               if (app?.cleaner_id) {
                 try {
-                  const { createNotification } = await import('@/lib/notifications');
                   await createNotification({
                     userId: app.cleaner_id,
                     title: 'Offer Declined ⚠️',

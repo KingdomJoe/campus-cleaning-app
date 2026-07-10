@@ -20,6 +20,12 @@ Notifications.setNotificationHandler({
  * Register for push notifications and return the Expo push token.
  */
 export async function registerForPushNotifications(): Promise<string | null> {
+  // Push notifications are not supported on web without a configured VAPID key.
+  // Skip registration entirely on web to avoid noisy runtime errors.
+  if (Platform.OS === 'web') {
+    return null;
+  }
+
   if (!Device.isDevice) {
     console.warn('Push notifications require a physical device');
     return null;

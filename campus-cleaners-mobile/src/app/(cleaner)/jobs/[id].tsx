@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
 import { createNotification } from '@/lib/notifications';
+import { trackEvent } from '@/lib/analytics';
 import type { Booking, BookingStatus } from '@/lib/database.types';
 import StatusBadge from '@/components/StatusBadge';
 import LoadingScreen from '@/components/LoadingScreen';
@@ -194,7 +195,6 @@ export default function JobDetailScreen() {
     const success = await updateBookingStatus(booking.id, transition.next);
     if (success) {
       try {
-        const { trackEvent } = await import('@/lib/analytics');
         trackEvent('job_status_changed', {
           bookingId: booking.id,
           oldStatus: booking.status,

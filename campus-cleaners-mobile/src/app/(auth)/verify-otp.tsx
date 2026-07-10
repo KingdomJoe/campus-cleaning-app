@@ -17,6 +17,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { uploadAvatar, uploadDocument } from "@/lib/api/uploads";
+import { identifyUser, trackEvent } from "@/lib/analytics";
 import { colors, spacing } from "@/lib/theme";
 
 const OTP_LENGTH = 6;
@@ -80,8 +81,6 @@ export default function VerifyOTPScreen() {
 
           if (user) {
             try {
-              const { identifyUser, trackEvent } =
-                await import("@/lib/analytics");
               identifyUser(user.id, user.email, user.user_metadata?.full_name);
               trackEvent("login", { role: userRole });
             } catch (err) {
