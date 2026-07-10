@@ -30,6 +30,13 @@ const VERIFICATION_FILTERS: { label: string; value: string; count?: number }[] =
   { label: 'Rejected', value: 'rejected' },
 ]
 
+const STATUS_COUNTS: { label: string; value: VerificationStatus; tint: string }[] = [
+  { label: 'Approved', value: 'approved', tint: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { label: 'Pending', value: 'pending', tint: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { label: 'Incomplete', value: 'incomplete', tint: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { label: 'Rejected', value: 'rejected', tint: 'bg-red-50 text-red-700 border-red-200' },
+]
+
 const CHECKLIST_ITEMS = [
   { key: 'id_card', label: 'National ID / Passport' },
   { key: 'guarantor', label: 'Guarantor Form' },
@@ -112,6 +119,14 @@ export default function VerificationsPage() {
   const checklist = selected ? buildChecklist(selected, cleanerDocs) : []
   const checklistDone = checklist.filter((i) => i.done).length
 
+  const handleVerify = async (cleaner: Cleaner) => {
+    const sb = createClient()
+    await setCleanerVerification(sb, cleaner.id, 'approved')
+    if (selected?.id === cleaner.id) {
+      setSelected({ ...selected, verificationStatus: 'approved' as VerificationStatus })
+    }
+  }
+
   return (
     <div className="flex gap-6">
       {/* Left panel */}
@@ -131,6 +146,22 @@ export default function VerificationsPage() {
             </p>
           </div>
         )}
+
+        {/* Stats bar — counts per verification status */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          {STATUS_COUNTS.map((s) => {
+            const count = cleaners.filter((c) => c.verificationStatus === s.value).length
+            return (
+              <div
+                key={s.value}
+                className={cn('rounded-xl border px-3 py-2.5 text-center', s.tint)}
+              >
+                <p className="text-xl font-bold leading-none">{count}</p>
+                <p className="text-[11px] font-medium mt-1">{s.label}</p>
+              </div>
+            )
+          })}
+        </div>
 
         {/* Filter tabs */}
         <div className="flex items-center gap-1.5 bg-[#f4f7f6] rounded-lg p-1 mb-4 w-fit">
@@ -167,12 +198,18 @@ export default function VerificationsPage() {
             const cl = buildChecklist(cleaner)
             const done = cl.filter((i) => i.done).length
             const isSelected = selected?.id === cleaner.id
+            const isPending = cleaner.verificationStatus === 'pending'
             return (
-              <button
+              <div
                 key={cleaner.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelected(cleaner)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setSelected(cleaner)
+                }}
                 className={cn(
-                  'text-left bg-white rounded-xl border p-4 transition-all hover:shadow-md hover:-translate-y-0.5',
+                  'text-left bg-white rounded-xl border p-4 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer',
                   isSelected
                     ? 'border-[#00684a] ring-1 ring-[#00684a]/20'
                     : 'border-[#e1e5e8]'
@@ -218,7 +255,27 @@ export default function VerificationsPage() {
                     </span>
                   )}
                 </div>
-              </button>
+
+                {/* Pending-only actions: Details + Verify */}
+                {isPending && (
+                  <div className="flex gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setSelected(cleaner)}
+                      className="flex-1 h-9 rounded-lg border border-[#e1e5e8] bg-white text-sm text-[#5c6c7a] hover:bg-[#f4f7f6] transition-colors font-medium flex items-center justify-center gap-1.5"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Details
+                    </button>
+                    <button
+                      onClick={() => handleVerify(cleaner)}
+                      className="flex-1 h-9 rounded-lg bg-[#00ed64] text-sm text-[#001e2b] hover:bg-[#00c853] transition-colors font-semibold flex items-center justify-center gap-1.5"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Verify
+                    </button>
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>

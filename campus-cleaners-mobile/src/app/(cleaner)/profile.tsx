@@ -335,8 +335,10 @@ export default function CleanerProfileScreen() {
       setIsEditing(false);
       showToast('Profile details updated successfully!', 'success');
     } catch (err: any) {
+      const message = err?.message || 'Failed to save profile changes.';
       console.error("Error saving profile details:", err);
-      showToast(err.message || 'Failed to save profile changes.', 'error');
+      showToast(message, 'error');
+      Alert.alert('Save failed', message);
     } finally {
       setIsSaving(false);
     }
@@ -384,8 +386,10 @@ export default function CleanerProfileScreen() {
       setIsEditingPersonal(false);
       showToast('Personal details updated successfully!', 'success');
     } catch (err: any) {
+      const message = err?.message || 'Failed to save personal details.';
       console.error("Error saving personal details:", err);
-      showToast(err.message || 'Failed to save personal details.', 'error');
+      showToast(message, 'error');
+      Alert.alert('Save failed', message);
     } finally {
       setIsSaving(false);
     }

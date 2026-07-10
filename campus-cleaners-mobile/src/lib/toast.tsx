@@ -1,5 +1,6 @@
 import React, { createContext, useState, useCallback, useRef, useEffect } from 'react';
 import { Snackbar } from 'react-native-paper';
+import { Alert } from 'react-native';
 
 interface ToastContextType {
   showToast: (message: string, type?: 'success' | 'error' | 'info', duration?: number) => void;
@@ -19,8 +20,12 @@ export function showToast(message: string, type: ToastType = 'info', duration: n
   if (emitToast) {
     emitToast(message, type, duration);
   } else {
-    // Provider not mounted yet (e.g. very early). Fall back to console.
+    // Provider not mounted yet (e.g. very early). Surface errors as a native
+    // alert so failures are never silent on preview/production builds.
     console.log(`[Toast] ${type.toUpperCase()}: ${message}`);
+    if (type === 'error') {
+      Alert.alert('Error', message);
+    }
   }
 }
 

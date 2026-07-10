@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Session, User } from '@supabase/supabase-js';
 import type { Profile, CleanerProfile, UserRole } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
+import { resetAnalytics } from '@/lib/analytics';
 
 interface AuthState {
   session: Session | null;
@@ -109,7 +110,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signOut: async () => {
     await supabase.auth.signOut();
     try {
-      const { resetAnalytics } = await import('@/lib/analytics');
       resetAnalytics();
     } catch (err) {
       console.error('Error resetting analytics:', err);

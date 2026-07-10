@@ -132,6 +132,7 @@ export default function ProfileScreen() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to save profile';
       showToast(message, 'error');
+      Alert.alert('Save failed', message);
     } finally {
       setIsSaving(false);
     }

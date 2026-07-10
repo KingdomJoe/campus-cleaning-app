@@ -53,6 +53,62 @@ export async function takePhoto(options?: {
 }
 
 /**
+ * Read a local file URI into a Blob/ArrayBuffer.
+ * Tries XMLHttpRequest (blob) first, then fetch(), then FileReader (base64),
+ * to stay robust across dev and release (Hermes/minified) builds where the
+ * Blob polyfill / XHR responseType can be unreliable.
+ */
+async function readLocalFile(localUri: string): Promise<Blob | ArrayBuffer> {
+  // 1. XMLHttpRequest with blob responseType
+  try {
+    const blob: Blob = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+        resolve(xhr.response);
+      };
+      xhr.onerror = function (e) {
+        reject(new Error('XHR blob read failed: ' + JSON.stringify(e)));
+      };
+      xhr.responseType = 'blob';
+      xhr.open('GET', localUri, true);
+      xhr.send(null);
+    });
+    if (blob && blob.size > 0) return blob;
+    throw new Error('XHR returned empty blob');
+  } catch (xhrErr) {
+    console.warn('[uploads] XHR blob read failed, falling back:', xhrErr);
+  }
+
+  // 2. fetch() -> blob (works in React Native runtime)
+  try {
+    const resp = await fetch(localUri);
+    const blob = await resp.blob();
+    if (blob && blob.size > 0) return blob;
+    throw new Error('fetch returned empty blob');
+  } catch (fetchErr) {
+    console.warn('[uploads] fetch blob read failed, falling back:', fetchErr);
+  }
+
+  // 3. FileReader -> base64 -> Uint8Array -> Blob (last resort)
+  return await new Promise<Blob>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('FileReader failed to read local file'));
+    reader.onload = () => {
+      try {
+        const base64 = (reader.result as string).split(',')[1];
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        resolve(new Blob([bytes], { type: 'image/jpeg' }));
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error('Failed to decode base64 file'));
+      }
+    };
+    reader.readAsDataURL({ uri: localUri } as unknown as Blob);
+  });
+}
+
+/**
  * Upload a local image URI to Supabase Storage.
  * Returns the public URL of the uploaded file.
  */
@@ -62,19 +118,7 @@ export async function uploadImage(
   filePath: string
 ): Promise<string | null> {
   try {
-    // Read the file as a blob using XMLHttpRequest for maximum compatibility in React Native
-    const blob: Blob = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.onload = function () {
-        resolve(xhr.response);
-      };
-      xhr.onerror = function (e) {
-        reject(new Error('Failed to read local file: ' + JSON.stringify(e)));
-      };
-      xhr.responseType = 'blob';
-      xhr.open('GET', localUri, true);
-      xhr.send(null);
-    });
+    const file = await readLocalFile(localUri);
 
     // Determine the content type
     const extension = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';
@@ -83,7 +127,7 @@ export async function uploadImage(
 
     const { error } = await supabase.storage
       .from(bucket)
-      .upload(filePath, blob, {
+      .upload(filePath, file as any, {
         contentType,
         upsert: true,
       });

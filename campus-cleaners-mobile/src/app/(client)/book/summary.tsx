@@ -72,6 +72,7 @@ export default function BookingSummaryScreen() {
     if (validationError) {
       console.log('[BookingSummary] Validation failed:', validationError);
       showToast(validationError, 'error');
+      Alert.alert('Missing details', validationError);
       return;
     }
 
@@ -79,6 +80,7 @@ export default function BookingSummaryScreen() {
     if (!session?.user?.id) {
       console.log('[BookingSummary] No session user found, redirecting to login');
       showToast('Authentication error. Please log in again.', 'error');
+      Alert.alert('Session expired', 'Please log in again to confirm your booking.');
       router.replace('/(auth)/login');
       return;
     }
@@ -99,12 +101,14 @@ export default function BookingSummaryScreen() {
         console.error('[BookingSummary] createBooking returned null');
         setError(errMsg);
         showToast(errMsg, 'error');
+        Alert.alert('Booking failed', errMsg);
       }
     } catch (err: any) {
       const errMsg = err?.message || 'Something went wrong. Please try again.';
       console.error('[BookingSummary] Error creating booking:', err);
       setError(errMsg);
       showToast(errMsg, 'error');
+      Alert.alert('Booking failed', errMsg);
     } finally {
       setIsLoading(false);
     }

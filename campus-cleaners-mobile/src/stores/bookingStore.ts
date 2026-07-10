@@ -3,6 +3,7 @@ import type { Booking, BookingStatus, LaundryItem } from '@/lib/database.types';
 import { supabase } from '@/lib/supabase';
 import { fetchBookingPayment, refundPayment } from '@/lib/api/payments';
 import { sendPushNotification } from '@/lib/notifications';
+import { trackEvent } from '@/lib/analytics';
 
 interface BookingFormState {
   serviceCategory: 'cleaning' | 'laundry' | null;
@@ -296,7 +297,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       }
 
       try {
-        const { trackEvent } = await import('@/lib/analytics');
         trackEvent('booking_created', {
           bookingId: data.id,
           serviceCategory: form.serviceCategory,
@@ -459,7 +459,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       }
 
       try {
-        const { trackEvent } = await import('@/lib/analytics');
         trackEvent('bid_applied', { bookingId, cleanerId });
       } catch (err) {
         console.error('Analytics tracking failed:', err);
@@ -568,7 +567,6 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       }
 
       try {
-        const { trackEvent } = await import('@/lib/analytics');
         trackEvent('cleaner_hired', { bookingId, cleanerId, applicationId: appId });
       } catch (err) {
         console.error('Analytics tracking failed:', err);
