@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Alert, Image } from 'react-native';
 import { Text, TextInput, useTheme } from 'react-native-paper';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, Stack } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { fetchMessages, sendMessage, fetchNewMessages } from '@/lib/api/messages';
 import { pickImage, takePhoto, uploadImage } from '@/lib/api/uploads';
@@ -18,6 +18,21 @@ export default function CleanerChatScreen() {
   const [sending, setSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [clientName, setClientName] = useState('Chat');
+
+  const loadBookingDetails = async () => {
+    if (!bookingId) return;
+    const { data } = await supabase
+      .from('bookings')
+      .select('client:profiles!bookings_client_id_fkey(full_name)')
+      .eq('id', bookingId)
+      .single();
+
+    if (data && data.client) {
+      setClientName((data.client as any).full_name || 'Chat');
+    }
+  };
 
   const loadMessages = async () => {
     const data = await fetchMessages(bookingId!);
@@ -47,6 +62,7 @@ export default function CleanerChatScreen() {
     if (!bookingId) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadMessages();
+    loadBookingDetails();
 
     pollingRef.current = setInterval(() => {
       pollNewMessages();
@@ -152,49 +168,52 @@ export default function CleanerChatScreen() {
   );
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
-      keyboardVerticalOffset={90}
-    >
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.list}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-      />
-      <View style={styles.inputBar}>
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder="Type a message..."
-          mode="outlined"
-          style={styles.textInput}
-          outlineColor={colors.outline}
-          activeOutlineColor={colors.primary}
-          textColor={colors.onSurface}
-          theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
-          dense
-          left={
-            <TextInput.Icon
-              icon="camera"
-              color={colors.primary}
-              onPress={handlePickImage}
-            />
-          }
-          right={
-            <TextInput.Icon
-              icon="send"
-              color={colors.primary}
-              onPress={handleSend}
-              disabled={sending || !input.trim()}
-            />
-          }
+    <>
+      <Stack.Screen options={{ title: clientName }} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.container}
+        keyboardVerticalOffset={90}
+      >
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          contentContainerStyle={styles.list}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
         />
-      </View>
-    </KeyboardAvoidingView>
+        <View style={styles.inputBar}>
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="Type a message..."
+            mode="outlined"
+            style={styles.textInput}
+            outlineColor={colors.outline}
+            activeOutlineColor={colors.primary}
+            textColor={colors.onSurface}
+            theme={{ colors: { onSurfaceVariant: colors.placeholder } }}
+            dense
+            left={
+              <TextInput.Icon
+                icon="camera"
+                color={colors.primary}
+                onPress={handlePickImage}
+              />
+            }
+            right={
+              <TextInput.Icon
+                icon="send"
+                color={colors.primary}
+                onPress={handleSend}
+                disabled={sending || !input.trim()}
+              />
+            }
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </>
   );
 }
 

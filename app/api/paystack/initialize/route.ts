@@ -1,12 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  })
+}
+
 export async function POST(request: NextRequest) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  }
+
   try {
     const { bookingId, email, amount } = await request.json()
 
     if (!bookingId || !email || !amount) {
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400, headers: corsHeaders })
     }
 
     // Initialize Paystack transaction
@@ -37,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     if (!paystackResponse.ok || !paystackData.status) {
       console.error('Paystack initialization failed:', paystackData)
-      return NextResponse.json({ error: paystackData.message || 'Paystack initialization failed' }, { status: 500 })
+      return NextResponse.json({ error: paystackData.message || 'Paystack initialization failed' }, { status: 500, headers: corsHeaders })
     }
 
     // Update Supabase payment record with paystack reference
@@ -66,9 +83,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       authorization_url: paystackData.data.authorization_url,
       reference: paystackData.data.reference,
-    })
+    }, { headers: corsHeaders })
   } catch (error: any) {
     console.error('Error in Paystack initialization route:', error)
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500, headers: corsHeaders })
   }
 }

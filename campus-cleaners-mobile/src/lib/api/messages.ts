@@ -82,12 +82,14 @@ export async function fetchNewMessages(
  * Fetch conversation list (latest message per booking) for a user.
  */
 export async function fetchConversations(userId: string) {
-  // Get all bookings the user is part of that have messages
+  // Get all bookings the user is part of that have messages or a cleaner assigned
   const { data: bookings, error } = await supabase
     .from('bookings')
     .select(`
       id,
       status,
+      updated_at,
+      cleaner_id,
       service_type:service_types(name),
       client:profiles!bookings_client_id_fkey(id, full_name, avatar_url),
       cleaner:profiles!bookings_cleaner_id_fkey(id, full_name, avatar_url)
@@ -101,9 +103,12 @@ export async function fetchConversations(userId: string) {
     return [];
   }
 
+  // Only keep bookings where a cleaner is hired/assigned
+  const activeBookings = (bookings ?? []).filter((b) => b.cleaner_id !== null);
+
   // For each booking, get the latest message
   const conversations = await Promise.all(
-    (bookings ?? []).map(async (booking) => {
+    activeBookings.map(async (booking) => {
       const { data: messages } = await supabase
         .from('messages')
         .select('*')
@@ -111,8 +116,10 @@ export async function fetchConversations(userId: string) {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      const lastMessage = messages?.[0] ?? null;
-      if (!lastMessage) return null;
+      const lastMessage = messages?.[0] ?? {
+        message: 'No messages yet. Tap to start chatting!',
+        created_at: booking.updated_at || new Date().toISOString(),
+      };
 
       return {
         bookingId: booking.id,

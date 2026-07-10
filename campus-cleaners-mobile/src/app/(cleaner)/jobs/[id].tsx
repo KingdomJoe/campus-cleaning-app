@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { Text, Button, Card, Divider, useTheme, ActivityIndicator, Portal, Dialog, RadioButton } from 'react-native-paper';
-import { useLocalSearchParams, router } from 'expo-router';
+import { View, StyleSheet, ScrollView, Alert, Pressable } from 'react-native';
+import { Text, Button, Card, Divider, useTheme, ActivityIndicator, Portal, Dialog, RadioButton, Avatar } from 'react-native-paper';
+import { useLocalSearchParams, router, Stack } from 'expo-router';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
@@ -260,201 +261,246 @@ export default function JobDetailScreen() {
   const canCancel = isAssignedToMe && ['accepted', 'en_route', 'arrived'].includes(booking.status);
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
-      <View style={styles.statusRow}>
-        <StatusBadge status={booking.status} />
-      </View>
+    <>
+      <Stack.Screen
+        options={{
+          headerLeft: () => (
+            <Pressable
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.push('/(cleaner)/jobs' as never);
+                }
+              }}
+              style={{ marginRight: 16, padding: 4 }}
+              accessibilityLabel="Go back"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons
+                name="arrow-left"
+                size={24}
+                color={theme.colors.onSurface}
+              />
+            </Pressable>
+          ),
+        }}
+      />
+      <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
+        <View style={styles.statusRow}>
+          <StatusBadge status={booking.status} />
+        </View>
 
-      {/* Service Details */}
-      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
-        <Card.Content>
-          <Text style={[styles.serviceName, { color: theme.colors.onSurface }]} variant="titleLarge">
-            {booking.service_type?.name ?? 'Service'}
-          </Text>
-          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-          <DetailRow label="Location" value={booking.location} />
-          <DetailRow label="Date" value={booking.scheduled_date} />
-          <DetailRow label="Time" value={booking.scheduled_time} />
-          <DetailRow label="Payout" value={`GH₵ ${((booking.total_price ?? 0) * 0.8).toFixed(2)}`} highlight />
-          {booking.description && <DetailRow label="Notes" value={booking.description} />}
-
-          {booking.room_type && (
-            <>
-              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-              <DetailRow label="Room Type" value={booking.room_type} />
-              <DetailRow label="Room Size" value={booking.room_size ?? '—'} />
-              <DetailRow label="Rooms" value={String(booking.room_count ?? 1)} />
-              <DetailRow label="Bathroom" value={booking.bathroom_included ? 'Yes' : 'No'} />
-            </>
-          )}
-
-          {booking.laundry_items && Array.isArray(booking.laundry_items) && (
-            <>
-              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-              <Text style={[styles.subTitle, { color: theme.colors.primary }]} variant="labelLarge">Laundry Items</Text>
-              {(booking.laundry_items as { item_type: string; quantity: number }[]).map((item) => (
-                <DetailRow key={item.item_type} label={item.item_type} value={`× ${item.quantity}`} />
-              ))}
-            </>
-          )}
-        </Card.Content>
-      </Card>
-
-      {/* Client Info */}
-      {booking.client && isAssignedToMe && (
+        {/* Service Details */}
         <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
           <Card.Content>
-            <Text style={[styles.subTitle, { color: theme.colors.onSurfaceVariant }]} variant="titleSmall">Client</Text>
-            <Text style={[styles.clientName, { color: theme.colors.onSurface }]} variant="titleMedium">
-              {(booking.client as { full_name: string }).full_name}
+            <Text style={[styles.serviceName, { color: theme.colors.onSurface }]} variant="titleLarge">
+              {booking.service_type?.name ?? 'Service'}
             </Text>
+            <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+            <DetailRow label="Location" value={booking.location} />
+            <DetailRow label="Date" value={booking.scheduled_date} />
+            <DetailRow label="Time" value={booking.scheduled_time} />
+            <DetailRow label="Payout" value={`GH₵ ${((booking.total_price ?? 0) * 0.8).toFixed(2)}`} highlight />
+            {booking.description && <DetailRow label="Notes" value={booking.description} />}
+
+            {booking.room_type && (
+              <>
+                <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+                <DetailRow label="Room Type" value={booking.room_type} />
+                <DetailRow label="Room Size" value={booking.room_size ?? '—'} />
+                <DetailRow label="Rooms" value={String(booking.room_count ?? 1)} />
+                <DetailRow label="Bathroom" value={booking.bathroom_included ? 'Yes' : 'No'} />
+              </>
+            )}
+
+            {booking.laundry_items && Array.isArray(booking.laundry_items) && (
+              <>
+                <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+                <Text style={[styles.subTitle, { color: theme.colors.primary }]} variant="labelLarge">Laundry Items</Text>
+                {(booking.laundry_items as { item_type: string; quantity: number }[]).map((item) => (
+                  <DetailRow key={item.item_type} label={item.item_type} value={`× ${item.quantity}`} />
+                ))}
+              </>
+            )}
           </Card.Content>
         </Card>
-      )}
 
-      {/* Actions */}
-      <View style={styles.actions}>
-        {/* Bid/Application Flow */}
-        {isUnassigned && !isAssignedToMe && (
-          loadingApp ? (
-            <ActivityIndicator animating color={theme.colors.primary} />
-          ) : hasApplied ? (
+        {/* Client Info */}
+        {booking.client && isAssignedToMe && (
+          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
+            <Card.Content>
+              <Text style={[styles.subTitle, { color: theme.colors.onSurfaceVariant }]} variant="titleSmall">Client Details</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: spacing.md }}>
+                {(booking.client as any).avatar_url ? (
+                  <Avatar.Image size={40} source={{ uri: (booking.client as any).avatar_url }} />
+                ) : (
+                  <Avatar.Text
+                    size={40}
+                    label={(booking.client as { full_name: string }).full_name?.charAt(0) ?? '?'}
+                    style={{ backgroundColor: theme.colors.primaryContainer }}
+                    color={theme.colors.onPrimaryContainer}
+                  />
+                )}
+                <View>
+                  <Text style={[styles.clientName, { color: theme.colors.onSurface }]} variant="titleMedium">
+                    {(booking.client as { full_name: string }).full_name}
+                  </Text>
+                  {(booking.client as any).phone && (
+                    <Text style={{ color: theme.colors.onSurfaceVariant }} variant="bodyMedium">
+                      📞 {(booking.client as any).phone}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </Card.Content>
+          </Card>
+        )}
+
+        {/* Actions */}
+        <View style={styles.actions}>
+          {/* Bid/Application Flow */}
+          {isUnassigned && !isAssignedToMe && (
+            loadingApp ? (
+              <ActivityIndicator animating color={theme.colors.primary} />
+            ) : hasApplied ? (
+              <Button
+                mode="contained"
+                disabled
+                style={styles.actionBtn}
+              >
+                {appStatus === 'declined' ? 'Application Declined' : 'Applied - Awaiting Client Choice'}
+              </Button>
+            ) : canApply ? (
+              <Button
+                mode="contained"
+                icon="hand-pointing-right"
+                onPress={handleApply}
+                loading={updating}
+                disabled={updating}
+                buttonColor={theme.colors.primary}
+                textColor={colors.white}
+                style={styles.actionBtn}
+                contentStyle={styles.actionBtnContent}
+                labelStyle={styles.actionBtnLabel}
+              >
+                Apply for Job
+              </Button>
+            ) : (
+              <View style={styles.actionBtn}>
+                <Button
+                  mode="contained"
+                  disabled
+                  buttonColor={theme.colors.outline}
+                  textColor={theme.colors.onSurface}
+                  contentStyle={styles.actionBtnContent}
+                  labelStyle={styles.actionBtnLabel}
+                >
+                  {isApproved ? 'Complete Profile to Apply' : 'Verification Required to Apply'}
+                </Button>
+                <Text
+                  style={[styles.applyHint, { color: theme.colors.onSurfaceVariant }]}
+                  variant="bodySmall"
+                >
+                  {isApproved
+                    ? 'Finish your profile so you can apply for this job.'
+                    : 'You can view this job, but applying requires admin verification.'}
+                </Text>
+              </View>
+            )
+          )}
+
+          {/* Primary status transition (only for hired cleaner) */}
+          {isAssignedToMe && transition && (
             <Button
               mode="contained"
-              disabled
-              style={styles.actionBtn}
-            >
-              {appStatus === 'declined' ? 'Application Declined' : 'Applied - Awaiting Client Choice'}
-            </Button>
-          ) : canApply ? (
-            <Button
-              mode="contained"
-              icon="hand-pointing-right"
-              onPress={handleApply}
+              icon={transition.icon}
+              onPress={handleStatusUpdate}
               loading={updating}
               disabled={updating}
-              buttonColor={theme.colors.primary}
+              buttonColor={transition.color}
               textColor={colors.white}
               style={styles.actionBtn}
               contentStyle={styles.actionBtnContent}
               labelStyle={styles.actionBtnLabel}
             >
-              Apply for Job
+              {transition.label}
             </Button>
-          ) : (
-            <View style={styles.actionBtn}>
-              <Button
-                mode="contained"
-                disabled
-                buttonColor={theme.colors.outline}
-                textColor={theme.colors.onSurface}
-                contentStyle={styles.actionBtnContent}
-                labelStyle={styles.actionBtnLabel}
-              >
-                {isApproved ? 'Complete Profile to Apply' : 'Verification Required to Apply'}
-              </Button>
-              <Text
-                style={[styles.applyHint, { color: theme.colors.onSurfaceVariant }]}
-                variant="bodySmall"
-              >
-                {isApproved
-                  ? 'Finish your profile so you can apply for this job.'
-                  : 'You can view this job, but applying requires admin verification.'}
+          )}
+
+          {/* Chat */}
+          {canChat && (
+            <Button
+              mode="contained"
+              icon="chat"
+              onPress={() => router.push(`/(cleaner)/jobs/${booking.id}/chat` as never)}
+              buttonColor={theme.colors.secondary}
+              textColor={colors.white}
+              style={styles.actionBtn}
+            >
+              Chat with Client
+            </Button>
+          )}
+
+          {/* Photos */}
+          {canUploadPhotos && (
+            <Button
+              mode="outlined"
+              icon="camera"
+              onPress={() => router.push(`/(cleaner)/jobs/${booking.id}/photos` as never)}
+              textColor={theme.colors.primary}
+              style={styles.actionBtn}
+            >
+              Upload Photos
+            </Button>
+          )}
+
+          {/* Cancel Booking */}
+          {canCancel && (
+            <Button
+              mode="outlined"
+              icon="close-circle"
+              onPress={() => setShowCancelDialog(true)}
+              textColor={theme.colors.error}
+              style={[styles.actionBtn, { borderColor: theme.colors.error }]}
+            >
+              Cancel Booking
+            </Button>
+          )}
+        </View>
+
+        <Portal>
+          <Dialog visible={showCancelDialog} onDismiss={() => setShowCancelDialog(false)} style={{ backgroundColor: theme.colors.surfaceVariant }}>
+            <Dialog.Title style={{ color: theme.colors.onSurface }}>Cancel Booking</Dialog.Title>
+            <Dialog.Content>
+              <Text style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }} variant="bodyMedium">
+                Please select a reason for cancelling this booking:
               </Text>
-            </View>
-          )
-        )}
-
-        {/* Primary status transition (only for hired cleaner) */}
-        {isAssignedToMe && transition && (
-          <Button
-            mode="contained"
-            icon={transition.icon}
-            onPress={handleStatusUpdate}
-            loading={updating}
-            disabled={updating}
-            buttonColor={transition.color}
-            textColor={colors.white}
-            style={styles.actionBtn}
-            contentStyle={styles.actionBtnContent}
-            labelStyle={styles.actionBtnLabel}
-          >
-            {transition.label}
-          </Button>
-        )}
-
-        {/* Chat */}
-        {canChat && (
-          <Button
-            mode="contained"
-            icon="chat"
-            onPress={() => router.push(`/(cleaner)/jobs/${booking.id}/chat` as never)}
-            buttonColor={theme.colors.secondary}
-            textColor={colors.white}
-            style={styles.actionBtn}
-          >
-            Chat with Client
-          </Button>
-        )}
-
-        {/* Photos */}
-        {canUploadPhotos && (
-          <Button
-            mode="outlined"
-            icon="camera"
-            onPress={() => router.push(`/(cleaner)/jobs/${booking.id}/photos` as never)}
-            textColor={theme.colors.primary}
-            style={styles.actionBtn}
-          >
-            Upload Photos
-          </Button>
-        )}
-
-        {/* Cancel Booking */}
-        {canCancel && (
-          <Button
-            mode="outlined"
-            icon="close-circle"
-            onPress={() => setShowCancelDialog(true)}
-            textColor={theme.colors.error}
-            style={[styles.actionBtn, { borderColor: theme.colors.error }]}
-          >
-            Cancel Booking
-          </Button>
-        )}
-      </View>
-
-      <Portal>
-        <Dialog visible={showCancelDialog} onDismiss={() => setShowCancelDialog(false)} style={{ backgroundColor: theme.colors.surfaceVariant }}>
-          <Dialog.Title style={{ color: theme.colors.onSurface }}>Cancel Booking</Dialog.Title>
-          <Dialog.Content>
-            <Text style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }} variant="bodyMedium">
-              Please select a reason for cancelling this booking:
-            </Text>
-            {['Illness', 'Emergency', 'Safety Concern', 'Transportation Issue', 'Other'].map((reason) => (
-              <View key={reason} style={styles.dialogRadioRow}>
-                <RadioButton
-                  value={reason}
-                  status={cancelReason === reason ? 'checked' : 'unchecked'}
-                  onPress={() => setCancelReason(reason)}
-                  color={theme.colors.primary}
-                  uncheckedColor={theme.colors.onSurfaceVariant}
-                />
-                <Text style={{ color: theme.colors.onSurface, marginLeft: 8 }}>{reason}</Text>
-              </View>
-            ))}
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowCancelDialog(false)} textColor={theme.colors.onSurfaceVariant}>
-              Go Back
-            </Button>
-            <Button onPress={handleCancelJob} textColor={theme.colors.error} loading={updating} disabled={updating}>
-              Confirm Cancel
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
-    </ScrollView>
+              {['Illness', 'Emergency', 'Safety Concern', 'Transportation Issue', 'Other'].map((reason) => (
+                <View key={reason} style={styles.dialogRadioRow}>
+                  <RadioButton
+                    value={reason}
+                    status={cancelReason === reason ? 'checked' : 'unchecked'}
+                    onPress={() => setCancelReason(reason)}
+                    color={theme.colors.primary}
+                    uncheckedColor={theme.colors.onSurfaceVariant}
+                  />
+                  <Text style={{ color: theme.colors.onSurface, marginLeft: 8 }}>{reason}</Text>
+                </View>
+              ))}
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setShowCancelDialog(false)} textColor={theme.colors.onSurfaceVariant}>
+                Go Back
+              </Button>
+              <Button onPress={handleCancelJob} textColor={theme.colors.error} loading={updating} disabled={updating}>
+                Confirm Cancel
+              </Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
+      </ScrollView>
+    </>
   );
 }
 

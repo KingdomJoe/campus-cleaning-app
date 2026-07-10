@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Pressable, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Pressable, Image, Platform } from 'react-native';
 import { Text, Button, Card, Divider, Avatar, useTheme, ActivityIndicator } from 'react-native-paper';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, Stack } from 'expo-router';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Constants from 'expo-constants';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookingStore } from '@/stores/bookingStore';
@@ -110,51 +112,88 @@ export default function BookingDetailScreen() {
     const clientEmail = (booking as any).client?.email || profile?.email || 'client@campusclean.com';
     const amount = Number(booking.total_price);
 
-    Alert.alert(
-      'Verify & Pay Cleaner',
-      `You are about to verify the cleaning job. This will initiate a Paystack payment of GH₵${amount} to pay the cleaner. Do you wish to proceed?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Proceed to Pay',
-          onPress: async () => {
-            setIsLoading(true);
-            try {
-              // 1. Initialize Paystack on Next.js backend endpoint
-              const response = await fetch('https://admin-dashboard-ufc.vercel.app/api/paystack/initialize', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  bookingId: booking.id,
-                  email: clientEmail,
-                  amount: amount,
-                }),
-              });
-
-              const resData = await response.json();
-              setIsLoading(false);
-
-              if (!response.ok || !resData.authorization_url) {
-                Alert.alert('Payment Error', resData.error || 'Failed to initialize payment.');
-                return;
-              }
-
-              // 2. Open Paystack authorization_url in-app browser
-              await WebBrowser.openBrowserAsync(resData.authorization_url);
-
-              // 3. Refresh booking after returning to check if payment succeeded & webhook updated database
-              loadBooking();
-            } catch (err: any) {
-              setIsLoading(false);
-              console.error('Paystack initialization error:', err);
-              Alert.alert('Payment Error', 'An unexpected error occurred during payment.');
+    const doVerify = async () => {
+      setIsLoading(true);
+      try {
+        // 1. Initialize Paystack on Next.js backend endpoint
+        let apiBase = 'https://admin-dashboard-ufc.vercel.app';
+        if (__DEV__) {
+          if (Platform.OS === 'web') {
+            const hostname = window.location.hostname;
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+              apiBase = 'http://localhost:3000';
+            } else {
+              apiBase = `http://${hostname}:3000`;
+            }
+          } else {
+            const hostUri = Constants.expoConfig?.hostUri;
+            const hostIp = hostUri ? hostUri.split(':')[0] : null;
+            if (hostIp) {
+              apiBase = `http://${hostIp}:3000`;
+            } else {
+              apiBase = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
             }
           }
         }
-      ]
-    );
+
+        const response = await fetch(`${apiBase}/api/paystack/initialize`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            bookingId: booking.id,
+            email: clientEmail,
+            amount: amount,
+          }),
+        });
+
+        const resData = await response.json();
+        setIsLoading(false);
+
+        if (!response.ok || !resData.authorization_url) {
+          if (Platform.OS === 'web') {
+            alert(resData.error || 'Failed to initialize payment.');
+          } else {
+            Alert.alert('Payment Error', resData.error || 'Failed to initialize payment.');
+          }
+          return;
+        }
+
+        // 2. Open Paystack authorization_url in-app browser
+        await WebBrowser.openBrowserAsync(resData.authorization_url);
+
+        // 3. Refresh booking after returning to check if payment succeeded & webhook updated database
+        loadBooking();
+      } catch (err: any) {
+        setIsLoading(false);
+        console.error('Paystack initialization error:', err);
+        if (Platform.OS === 'web') {
+          alert('An unexpected error occurred during payment.');
+        } else {
+          Alert.alert('Payment Error', 'An unexpected error occurred during payment.');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm(`You are about to verify the cleaning job. This will initiate a Paystack payment of GH₵${amount} to pay the cleaner. Do you wish to proceed?`);
+      if (confirm) {
+        await doVerify();
+      }
+    } else {
+      Alert.alert(
+        'Verify & Pay Cleaner',
+        `You are about to verify the cleaning job. This will initiate a Paystack payment of GH₵${amount} to pay the cleaner. Do you wish to proceed?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Proceed to Pay',
+            onPress: doVerify
+          }
+        ]
+      );
+    }
   };
 
   const handleCancel = async () => {
@@ -163,291 +202,368 @@ export default function BookingDetailScreen() {
   };
 
   const handleHire = async (appId: string, cleanerId: string, cleanerName: string) => {
-    Alert.alert(
-      'Hire Cleaner',
-      `Are you sure you want to hire ${cleanerName} for this booking?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Hire',
-          onPress: async () => {
-            const success = await hireCleaner(booking.id, appId, cleanerId);
-            if (success) {
-              // Initiate escrow payment in status 'held'
-              try {
-                await initiatePayment({
-                  bookingId: booking.id,
-                  clientId: booking.client_id,
-                  cleanerId: cleanerId,
-                  amount: Number(booking.total_price),
-                });
-              } catch (err) {
-                console.error('Error initiating escrow payment:', err);
-              }
-
-
-
-              Alert.alert('Success', `${cleanerName} has been assigned to your booking!`);
-              loadBooking();
-            } else {
-              Alert.alert('Error', 'Failed to hire cleaner.');
-            }
-          }
+    const doHire = async () => {
+      const success = await hireCleaner(booking.id, appId, cleanerId);
+      if (success) {
+        // Initiate escrow payment in status 'held'
+        try {
+          await initiatePayment({
+            bookingId: booking.id,
+            clientId: booking.client_id,
+            cleanerId: cleanerId,
+            amount: Number(booking.total_price),
+          });
+        } catch (err) {
+          console.error('Error initiating escrow payment:', err);
         }
-      ]
-    );
+
+        if (Platform.OS === 'web') {
+          alert(`${cleanerName} has been assigned to your booking!`);
+        } else {
+          Alert.alert('Success', `${cleanerName} has been assigned to your booking!`);
+        }
+        loadBooking();
+      } else {
+        if (Platform.OS === 'web') {
+          alert('Failed to hire cleaner.');
+        } else {
+          Alert.alert('Error', 'Failed to hire cleaner.');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm(`Are you sure you want to hire ${cleanerName} for this booking?`);
+      if (confirm) {
+        await doHire();
+      }
+    } else {
+      Alert.alert(
+        'Hire Cleaner',
+        `Are you sure you want to hire ${cleanerName} for this booking?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Hire',
+            onPress: doHire
+          }
+        ]
+      );
+    }
   };
 
   const handleDeclineApp = async (appId: string, cleanerName: string) => {
-    Alert.alert(
-      'Decline Application',
-      `Are you sure you want to decline ${cleanerName}'s offer?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Decline',
-          onPress: async () => {
-            const { error } = await supabase
-              .from('booking_applications')
-              .update({ status: 'declined', updated_at: new Date().toISOString() })
-              .eq('id', appId);
+    const doDecline = async () => {
+      const { error } = await supabase
+        .from('booking_applications')
+        .update({ status: 'declined', updated_at: new Date().toISOString() })
+        .eq('id', appId);
 
-            if (!error) {
-              // Notify cleaner of application decline
-              const app = applications.find((a) => a.id === appId);
-              if (app?.cleaner_id) {
-                try {
-                  await createNotification({
-                    userId: app.cleaner_id,
-                    title: 'Offer Declined ⚠️',
-                    body: `Your offer for the booking at ${booking.location} was declined.`,
-                    data: { bookingId: booking.id, role: 'cleaner' },
-                  });
-                } catch (err) {
-                  console.error('Error notifying cleaner of decline:', err);
-                }
-              }
-
-              Alert.alert('Success', 'Application declined.');
-              loadBooking();
-            } else {
-              Alert.alert('Error', 'Failed to decline application.');
-            }
+      if (!error) {
+        // Notify cleaner of application decline
+        const app = applications.find((a) => a.id === appId);
+        if (app?.cleaner_id) {
+          try {
+            await createNotification({
+              userId: app.cleaner_id,
+              title: 'Offer Declined ⚠️',
+              body: `Your offer for the booking at ${booking.location} was declined.`,
+              data: { bookingId: booking.id, role: 'cleaner' },
+            });
+          } catch (err) {
+            console.error('Error notifying cleaner of decline:', err);
           }
         }
-      ]
-    );
+
+        if (Platform.OS === 'web') {
+          alert('Application declined.');
+        } else {
+          Alert.alert('Success', 'Application declined.');
+        }
+        loadBooking();
+      } else {
+        if (Platform.OS === 'web') {
+          alert('Failed to decline application.');
+        } else {
+          Alert.alert('Error', 'Failed to decline application.');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm(`Are you sure you want to decline ${cleanerName}'s offer?`);
+      if (confirm) {
+        await doDecline();
+      }
+    } else {
+      Alert.alert(
+        'Decline Application',
+        `Are you sure you want to decline ${cleanerName}'s offer?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Decline',
+            onPress: doDecline
+          }
+        ]
+      );
+    }
   };
 
   const activeApps = applications.filter((app) => app.status === 'pending');
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
-      <View style={styles.statusRow}>
-        <StatusBadge status={booking.status} />
-      </View>
+    <>
+      <Stack.Screen
+        options={{
+          headerLeft: () => (
+            <Pressable
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.push('/(client)/bookings' as never);
+                }
+              }}
+              style={{ marginRight: 16, padding: 4 }}
+              accessibilityLabel="Go back"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons
+                name="arrow-left"
+                size={24}
+                color={theme.colors.onSurface}
+              />
+            </Pressable>
+          ),
+        }}
+      />
+      <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]} contentContainerStyle={styles.content}>
+        <View style={styles.statusRow}>
+          <StatusBadge status={booking.status} />
+        </View>
 
-      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
-        <Card.Content>
-          <Text style={[styles.serviceName, { color: theme.colors.onSurface }]} variant="titleLarge">
-            {booking.service_type?.name ?? 'Service'}
-          </Text>
-          <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-          <DetailRow label="Location" value={booking.location} />
-          <DetailRow label="Date" value={booking.scheduled_date} />
-          <DetailRow label="Time" value={booking.scheduled_time} />
-          <DetailRow label="Price" value={`GH₵ ${booking.total_price?.toFixed(2)}`} highlight />
-          {booking.description && <DetailRow label="Notes" value={booking.description} />}
-        </Card.Content>
-      </Card>
-
-      {booking.cleaner && (
         <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
           <Card.Content>
-            <Text style={[styles.sectionTitle, { color: theme.colors.onSurfaceVariant }]} variant="titleSmall">Assigned Cleaner</Text>
-            <Text style={[styles.cleanerName, { color: theme.colors.onSurface }]} variant="titleMedium">
-              {(booking.cleaner as { full_name: string }).full_name}
+            <Text style={[styles.serviceName, { color: theme.colors.onSurface }]} variant="titleLarge">
+              {booking.service_type?.name ?? 'Service'}
             </Text>
-          </Card.Content>
-        </Card>
-      )}
-
-      {/* Before/After Photos Card */}
-      {photos.length > 0 && (
-        <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
-          <Card.Content>
-            <Text style={[styles.sectionTitle, { color: theme.colors.primary }]} variant="titleSmall">Job Verification Photos</Text>
             <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-            
-            {photos.filter((p) => p.photo_type === 'before').length > 0 && (
-              <View style={{ marginBottom: spacing.md }}>
-                <Text style={{ color: theme.colors.onSurface, fontWeight: '600', marginBottom: spacing.xs }} variant="bodyMedium">📸 Before Cleaning</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-                  {photos.filter((p) => p.photo_type === 'before').map((photo) => (
-                    <Image key={photo.id} source={{ uri: photo.file_url }} style={styles.verificationPhoto} />
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {photos.filter((p) => p.photo_type === 'after').length > 0 && (
-              <View>
-                <Text style={{ color: theme.colors.onSurface, fontWeight: '600', marginBottom: spacing.xs }} variant="bodyMedium">✅ After Cleaning</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-                  {photos.filter((p) => p.photo_type === 'after').map((photo) => (
-                    <Image key={photo.id} source={{ uri: photo.file_url }} style={styles.verificationPhoto} />
-                  ))}
-                </ScrollView>
-              </View>
-            )}
+            <DetailRow label="Location" value={booking.location} />
+            <DetailRow label="Date" value={booking.scheduled_date} />
+            <DetailRow label="Time" value={booking.scheduled_time} />
+            <DetailRow label="Price" value={`GH₵ ${booking.total_price?.toFixed(2)}`} highlight />
+            {booking.description && <DetailRow label="Notes" value={booking.description} />}
           </Card.Content>
         </Card>
-      )}
 
-      {/* Applications section */}
-      {booking.status === 'requested' && !booking.cleaner_id && (
-        <View style={styles.appsSection}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]} variant="titleMedium">
-            Cleaner Offers ({activeApps.length})
-          </Text>
+        {booking.cleaner && (
+          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
+            <Card.Content>
+              <Text style={[styles.sectionTitle, { color: theme.colors.onSurfaceVariant }]} variant="titleSmall">Assigned Cleaner</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: spacing.md }}>
+                {(booking.cleaner as any).avatar_url ? (
+                  <Avatar.Image size={40} source={{ uri: (booking.cleaner as any).avatar_url }} />
+                ) : (
+                  <Avatar.Text
+                    size={40}
+                    label={(booking.cleaner as { full_name: string }).full_name?.charAt(0) ?? '?'}
+                    style={{ backgroundColor: theme.colors.primaryContainer }}
+                    color={theme.colors.onPrimaryContainer}
+                  />
+                )}
+                <View>
+                  <Text style={[styles.cleanerName, { color: theme.colors.onSurface }]} variant="titleMedium">
+                    {(booking.cleaner as { full_name: string }).full_name}
+                  </Text>
+                  {(booking.cleaner as any).phone && (
+                    <Text style={{ color: theme.colors.onSurfaceVariant }} variant="bodyMedium">
+                      📞 {(booking.cleaner as any).phone}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </Card.Content>
+          </Card>
+        )}
 
-          {loadingApps ? (
-            <ActivityIndicator animating color={theme.colors.primary} style={{ marginVertical: spacing.lg }} />
-          ) : activeApps.length === 0 ? (
-            <Text style={[styles.noAppsText, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">
-              Waiting for verified cleaners to apply for this job...
+        {/* Before/After Photos Card */}
+        {photos.length > 0 && (
+          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="contained">
+            <Card.Content>
+              <Text style={[styles.sectionTitle, { color: theme.colors.primary }]} variant="titleSmall">Job Verification Photos</Text>
+              <Divider style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
+              
+              {photos.filter((p) => p.photo_type === 'before').length > 0 && (
+                <View style={{ marginBottom: spacing.md }}>
+                  <Text style={{ color: theme.colors.onSurface, fontWeight: '600', marginBottom: spacing.xs }} variant="bodyMedium">📸 Before Cleaning</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+                    {photos.filter((p) => p.photo_type === 'before').map((photo) => (
+                      <Image key={photo.id} source={{ uri: photo.file_url }} style={styles.verificationPhoto} />
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {photos.filter((p) => p.photo_type === 'after').length > 0 && (
+                <View>
+                  <Text style={{ color: theme.colors.onSurface, fontWeight: '600', marginBottom: spacing.xs }} variant="bodyMedium">✅ After Cleaning</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+                    {photos.filter((p) => p.photo_type === 'after').map((photo) => (
+                      <Image key={photo.id} source={{ uri: photo.file_url }} style={styles.verificationPhoto} />
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </Card.Content>
+          </Card>
+        )}
+
+        {/* Applications section */}
+        {booking.status === 'requested' && !booking.cleaner_id && (
+          <View style={styles.appsSection}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]} variant="titleMedium">
+              Cleaner Offers ({activeApps.length})
             </Text>
-          ) : (
-            activeApps.map((app) => {
-              const cleanerInfo = app.cleaner;
-              const cleanerProfileInfo = cleanerInfo?.cleaner_profile?.[0] || app.cleaner_profile;
-              const name = cleanerInfo?.full_name ?? 'Cleaner';
-              const rating = cleanerProfileInfo?.avg_rating ?? 0;
-              const jobs = cleanerProfileInfo?.total_jobs ?? 0;
-              const bio = cleanerProfileInfo?.bio ?? 'No bio provided.';
-              const skills = cleanerProfileInfo?.skills ?? [];
 
-              return (
-                <Card key={app.id} style={[styles.appCard, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="outlined">
-                  <Card.Content style={styles.appCardContent}>
-                    <View style={styles.appCardHeader}>
-                      {cleanerInfo?.avatar_url ? (
-                        <Avatar.Image size={40} source={{ uri: cleanerInfo.avatar_url }} />
-                      ) : (
-                        <Avatar.Text size={40} label={name.charAt(0)} color={colors.white} style={{ backgroundColor: theme.colors.primary }} />
-                      )}
-                      <View style={styles.appCardDetails}>
-                        <Text style={[styles.appCleanerName, { color: theme.colors.onSurface }]} variant="titleMedium">
-                          {name}
-                        </Text>
-                        <View style={styles.ratingRow}>
-                          <StarRating rating={rating} size={14} />
-                          <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12, marginLeft: 4 }}>
-                            ({jobs} job{jobs !== 1 ? 's' : ''})
+            {loadingApps ? (
+              <ActivityIndicator animating color={theme.colors.primary} style={{ marginVertical: spacing.lg }} />
+            ) : activeApps.length === 0 ? (
+              <Text style={[styles.noAppsText, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">
+                Waiting for verified cleaners to apply for this job...
+              </Text>
+            ) : (
+              activeApps.map((app) => {
+                const cleanerInfo = app.cleaner;
+                const cleanerProfileInfo = cleanerInfo?.cleaner_profile?.[0] || app.cleaner_profile;
+                const name = cleanerInfo?.full_name ?? 'Cleaner';
+                const rating = cleanerProfileInfo?.avg_rating ?? 0;
+                const jobs = cleanerProfileInfo?.total_jobs ?? 0;
+                const bio = cleanerProfileInfo?.bio ?? 'No bio provided.';
+                const skills = cleanerProfileInfo?.skills ?? [];
+
+                return (
+                  <Card key={app.id} style={[styles.appCard, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outline }]} mode="outlined">
+                    <Card.Content style={styles.appCardContent}>
+                      <View style={styles.appCardHeader}>
+                        {cleanerInfo?.avatar_url ? (
+                          <Avatar.Image size={40} source={{ uri: cleanerInfo.avatar_url }} />
+                        ) : (
+                          <Avatar.Text size={40} label={name.charAt(0)} color={colors.white} style={{ backgroundColor: theme.colors.primary }} />
+                        )}
+                        <View style={styles.appCardDetails}>
+                          <Text style={[styles.appCleanerName, { color: theme.colors.onSurface }]} variant="titleMedium">
+                            {name}
                           </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {bio ? (
-                      <Text style={[styles.appBioText, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">
-                        {bio}
-                      </Text>
-                    ) : null}
-
-                    {skills && skills.length > 0 ? (
-                      <View style={styles.skillsRow}>
-                        {skills.map((skill: string) => (
-                          <View key={skill} style={[styles.skillTag, { backgroundColor: theme.colors.primaryContainer }]}>
-                            <Text style={{ color: theme.colors.primary, fontSize: 10, fontWeight: '600' }}>
-                              {skill}
+                          <View style={styles.ratingRow}>
+                            <StarRating rating={rating} size={14} />
+                            <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12, marginLeft: 4 }}>
+                              ({jobs} job{jobs !== 1 ? 's' : ''})
                             </Text>
                           </View>
-                        ))}
+                        </View>
                       </View>
-                    ) : null}
 
-                    <View style={styles.appActions}>
-                      <Button
-                        mode="outlined"
-                        onPress={() => handleDeclineApp(app.id, name)}
-                        textColor={theme.colors.error}
-                        style={[styles.appBtn, { borderColor: theme.colors.error }]}
-                        compact
-                      >
-                        Decline
-                      </Button>
-                      <Button
-                        mode="contained"
-                        onPress={() => handleHire(app.id, app.cleaner_id, name)}
-                        buttonColor={theme.colors.primary}
-                        style={styles.appBtn}
-                        compact
-                      >
-                        Hire Cleaner
-                      </Button>
-                    </View>
-                  </Card.Content>
-                </Card>
-              );
-            })
+                      {bio ? (
+                        <Text style={[styles.appBioText, { color: theme.colors.onSurfaceVariant }]} variant="bodyMedium">
+                          {bio}
+                        </Text>
+                      ) : null}
+
+                      {skills && skills.length > 0 ? (
+                        <View style={styles.skillsRow}>
+                          {skills.map((skill: string) => (
+                            <View key={skill} style={[styles.skillTag, { backgroundColor: theme.colors.primaryContainer }]}>
+                              <Text style={{ color: theme.colors.primary, fontSize: 10, fontWeight: '600' }}>
+                                {skill}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+
+                      <View style={styles.appActions}>
+                        <Button
+                          mode="outlined"
+                          onPress={() => handleDeclineApp(app.id, name)}
+                          textColor={theme.colors.error}
+                          style={[styles.appBtn, { borderColor: theme.colors.error }]}
+                          compact
+                        >
+                          Decline
+                        </Button>
+                        <Button
+                          mode="contained"
+                          onPress={() => handleHire(app.id, app.cleaner_id, name)}
+                          buttonColor={theme.colors.primary}
+                          style={styles.appBtn}
+                          compact
+                        >
+                          Hire Cleaner
+                        </Button>
+                      </View>
+                    </Card.Content>
+                  </Card>
+                );
+              })
+            )}
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        <View style={styles.actions}>
+          {canChat && booking.cleaner_id && (
+            <Button
+              mode="contained"
+              icon="chat"
+              onPress={() => router.push(`/(client)/bookings/${booking.id}/chat` as never)}
+              buttonColor={theme.colors.secondary}
+              textColor={colors.white}
+              style={styles.actionBtn}
+            >
+              Chat
+            </Button>
+          )}
+
+          {canVerify && (
+            <Button
+              mode="contained"
+              icon="check-circle"
+              onPress={handleVerify}
+              buttonColor={theme.colors.primary}
+              textColor={colors.white}
+              style={styles.actionBtn}
+            >
+              Verify & Release Payment
+            </Button>
+          )}
+
+          {canRate && (
+            <Button
+              mode="outlined"
+              icon="star"
+              onPress={() => router.push(`/(client)/bookings/${booking.id}/rate` as never)}
+              textColor={theme.colors.primary}
+              style={[styles.actionBtn, { borderColor: theme.colors.primary }]}
+            >
+              Rate Cleaner
+            </Button>
+          )}
+
+          {canCancel && (
+            <Button
+              mode="outlined"
+              icon="close-circle"
+              onPress={handleCancel}
+              textColor={theme.colors.error}
+              style={[styles.actionBtn, { borderColor: theme.colors.error }]}
+            >
+              Cancel Booking
+            </Button>
           )}
         </View>
-      )}
-
-      {/* Action Buttons */}
-      <View style={styles.actions}>
-        {canChat && booking.cleaner_id && (
-          <Button
-            mode="contained"
-            icon="chat"
-            onPress={() => router.push(`/(client)/bookings/${booking.id}/chat` as never)}
-            buttonColor={theme.colors.secondary}
-            textColor={colors.white}
-            style={styles.actionBtn}
-          >
-            Chat
-          </Button>
-        )}
-
-        {canVerify && (
-          <Button
-            mode="contained"
-            icon="check-circle"
-            onPress={handleVerify}
-            buttonColor={theme.colors.primary}
-            textColor={colors.white}
-            style={styles.actionBtn}
-          >
-            Verify & Release Payment
-          </Button>
-        )}
-
-        {canRate && (
-          <Button
-            mode="outlined"
-            icon="star"
-            onPress={() => router.push(`/(client)/bookings/${booking.id}/rate` as never)}
-            textColor={theme.colors.primary}
-            style={[styles.actionBtn, { borderColor: theme.colors.primary }]}
-          >
-            Rate Cleaner
-          </Button>
-        )}
-
-        {canCancel && (
-          <Button
-            mode="outlined"
-            icon="close-circle"
-            onPress={handleCancel}
-            textColor={theme.colors.error}
-            style={[styles.actionBtn, { borderColor: theme.colors.error }]}
-          >
-            Cancel Booking
-          </Button>
-        )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </>
   );
 }
 
